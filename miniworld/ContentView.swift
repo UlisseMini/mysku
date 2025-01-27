@@ -10,19 +10,19 @@ import MapKit
 import CoreLocation
 
 struct ContentView: View {
-    @State private var isAuthenticated = false
+    @StateObject private var authManager = AuthManager.shared
     
     var body: some View {
-        if isAuthenticated {
+        if authManager.isAuthenticated {
             MainTabView()
         } else {
-            LoginView(isAuthenticated: $isAuthenticated)
+            LoginView()
         }
     }
 }
 
 struct LoginView: View {
-    @Binding var isAuthenticated: Bool
+    @StateObject private var authManager = AuthManager.shared
     
     var body: some View {
         VStack(spacing: 20) {
@@ -38,7 +38,7 @@ struct LoginView: View {
             Text("Connect with your community")
                 .foregroundStyle(.secondary)
             
-            Button(action: { isAuthenticated = true }) {
+            Button(action: { authManager.login() }) {
                 HStack {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .imageScale(.large)
@@ -98,10 +98,11 @@ struct MapView: View {
 }
 
 struct SettingsView: View {
-    @State private var privacyRadius = 100.0
+    @State private var privacyRadius = 0.0
     @State private var locationUpdatesEnabled = true
     @State private var selectedServers: Set<String> = ["Server 1", "Server 2"]
     let availableServers = ["Server 1", "Server 2", "Server 3", "Server 4"]
+    @StateObject private var authManager = AuthManager.shared
     
     var body: some View {
         NavigationView {
@@ -110,12 +111,12 @@ struct SettingsView: View {
                     Toggle("Location Updates", isOn: $locationUpdatesEnabled)
                     
                     VStack(alignment: .leading) {
-                        Text("Privacy Radius: \(Int(privacyRadius))m")
-                        Slider(value: $privacyRadius, in: 50...1000)
+                        Text("Privacy Radius: \(formatDistance(privacyRadius))")
+                        Slider(value: $privacyRadius, in: 0...10000)
                     }
                 }
                 
-                Section("Visible to servers") {
+                Section("Visible to Servers") {
                     ForEach(availableServers, id: \.self) { server in
                         Toggle(server, isOn: Binding(
                             get: { selectedServers.contains(server) },
@@ -132,11 +133,19 @@ struct SettingsView: View {
                 
                 Section {
                     Button("Sign Out", role: .destructive) {
-                        // TODO: Implement sign out
+                        authManager.logout()
                     }
                 }
             }
             .navigationTitle("Settings")
+        }
+    }
+    
+    private func formatDistance(_ meters: Double) -> String {
+        if meters >= 1000 {
+            return String(format: "%.1fkm", meters / 1000)
+        } else {
+            return "\(Int(meters))m"
         }
     }
 }
