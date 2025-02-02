@@ -1,6 +1,18 @@
 import Foundation
 import OAuthSwift
 
+// Guild model
+struct Guild: Codable, Identifiable {
+    let id: String
+    let name: String
+    let icon: String?
+    
+    var iconURL: URL? {
+        guard let icon = icon else { return nil }
+        return URL(string: "https://cdn.discordapp.com/icons/\(id)/\(icon).png")
+    }
+}
+
 class AuthManager: ObservableObject {
     static let shared = AuthManager()
     private let tokenKey = "auth_token"
@@ -16,6 +28,8 @@ class AuthManager: ObservableObject {
             objectWillChange.send()
         }
     }
+    
+    @Published var guilds: [Guild] = []
     
     init() {
         self.isAuthenticated = UserDefaults.standard.string(forKey: tokenKey) != nil
@@ -127,6 +141,39 @@ class AuthManager: ObservableObject {
             ) { _ in
                 print("Token revoked")
             }
+        }
+    }
+    
+    func fetchGuilds() async throws {
+        guard let token = UserDefaults.standard.string(forKey: tokenKey) else {
+            throw NSError(domain: "AuthManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "No auth token found"])
+        }
+        
+        guard let url = URL(string: "https://discord.com/api/users/@me/guilds") else {
+            throw NSError(domain: "AuthManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "AuthManager", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(
+                domain: "AuthManager",
+                code: httpResponse.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to fetch guilds: \(String(data: data, encoding: .utf8) ?? "")"]
+            )
+        }
+        
+        let fetchedGuilds = try JSONDecoder().decode([Guild].self, from: data)
+        await MainActor.run {
+            self.guilds = fetchedGuilds
         }
     }
 } 

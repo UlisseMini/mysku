@@ -97,59 +97,6 @@ struct MapView: View {
     }
 }
 
-struct SettingsView: View {
-    @State private var privacyRadius = 0.0
-    @State private var locationUpdatesEnabled = true
-    @State private var selectedServers: Set<String> = ["Server 1", "Server 2"]
-    let availableServers = ["Server 1", "Server 2", "Server 3", "Server 4"]
-    @StateObject private var authManager = AuthManager.shared
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Privacy") {
-                    Toggle("Location Updates", isOn: $locationUpdatesEnabled)
-                    
-                    VStack(alignment: .leading) {
-                        Text("Privacy Radius: \(formatDistance(privacyRadius))")
-                        Slider(value: $privacyRadius, in: 0...10000)
-                    }
-                }
-                
-                Section("Visible to Servers") {
-                    ForEach(availableServers, id: \.self) { server in
-                        Toggle(server, isOn: Binding(
-                            get: { selectedServers.contains(server) },
-                            set: { isSelected in
-                                if isSelected {
-                                    selectedServers.insert(server)
-                                } else {
-                                    selectedServers.remove(server)
-                                }
-                            }
-                        ))
-                    }
-                }
-                
-                Section {
-                    Button("Sign Out", role: .destructive) {
-                        authManager.logout()
-                    }
-                }
-            }
-            .navigationTitle("Settings")
-        }
-    }
-    
-    private func formatDistance(_ meters: Double) -> String {
-        if meters >= 1000 {
-            return String(format: "%.1fkm", meters / 1000)
-        } else {
-            return "\(Int(meters))m"
-        }
-    }
-}
-
 #Preview {
     ContentView()
 }
