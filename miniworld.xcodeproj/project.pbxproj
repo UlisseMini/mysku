@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3AE85C332D4E9B3100B2C238 /* OAuthSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 3AE85C322D4E9B3100B2C238 /* OAuthSwift */; };
+		3A9F5C582D58E944003D7855 /* OAuthSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 3A9F5C572D58E944003D7855 /* OAuthSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,7 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3AE85C332D4E9B3100B2C238 /* OAuthSwift in Frameworks */,
+				3A9F5C582D58E944003D7855 /* OAuthSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,7 +130,7 @@
 			);
 			name = miniworld;
 			packageProductDependencies = (
-				3AE85C322D4E9B3100B2C238 /* OAuthSwift */,
+				3A9F5C572D58E944003D7855 /* OAuthSwift */,
 			);
 			productName = miniworld;
 			productReference = 3A3210E22D47062200AB99BC /* miniworld.app */;
@@ -215,7 +215,7 @@
 			mainGroup = 3A3210D92D47062200AB99BC;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				3AE85C312D4E9B3100B2C238 /* XCRemoteSwiftPackageReference "OAuthSwift" */,
+				3A9F5C562D58E944003D7855 /* XCRemoteSwiftPackageReference "OAuthSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3A3210E32D47062200AB99BC /* Products */;
@@ -586,7 +586,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		3AE85C312D4E9B3100B2C238 /* XCRemoteSwiftPackageReference "OAuthSwift" */ = {
+		3A9F5C562D58E944003D7855 /* XCRemoteSwiftPackageReference "OAuthSwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/OAuthSwift/OAuthSwift.git";
 			requirement = {
@@ -597,9 +597,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		3AE85C322D4E9B3100B2C238 /* OAuthSwift */ = {
+		3A9F5C572D58E944003D7855 /* OAuthSwift */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 3AE85C312D4E9B3100B2C238 /* XCRemoteSwiftPackageReference "OAuthSwift" */;
+			package = 3A9F5C562D58E944003D7855 /* XCRemoteSwiftPackageReference "OAuthSwift" */;
 			productName = OAuthSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
