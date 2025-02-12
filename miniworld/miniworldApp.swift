@@ -6,12 +6,11 @@
 //
 
 import SwiftUI
-import OAuthSwift
 
 @main
 struct miniworldApp: App {
     init() {
-        // Configure OAuth callback handling
+        // Configure URL session
         URLSession.shared.configuration.httpCookieStorage?.cookieAcceptPolicy = .always
     }
     
@@ -21,7 +20,7 @@ struct miniworldApp: App {
                 .onOpenURL { url in
                     // Handle OAuth callback URL
                     if url.scheme == "miniworld" {
-                        OAuthSwift.handle(url: url)
+                        AuthManager.shared.handleCallback(url: url)
                     }
                 }
         }

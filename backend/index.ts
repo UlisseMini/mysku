@@ -5,6 +5,11 @@ import fetch from 'node-fetch';
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Discord OAuth configuration
+const DISCORD_CLIENT_ID = '1232840493696680038';
+const DISCORD_CLIENT_SECRET = 'RJA8G9cEA4ggLAqG-fZ_GsFSTHqwzZmS';
+const DISCORD_API = 'https://discord.com/api';
+
 // Logging middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
     console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
@@ -13,21 +18,37 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 app.use(express.json());
 
+// Add type declaration for the extended Request
+declare global {
+    namespace Express {
+        interface Request {
+            user?: User;
+        }
+    }
+}
+
+// API types. Could change. Ideally only by adding stuff and
+// staying backwards compatible.
 interface Location {
     latitude: number;
     longitude: number;
-    timestamp: number;
-    accuracy?: number;
+    accuracy: number; // meters; privacy radius is computed clientside
+}
+
+// Privacy settings for a user. Depending on these
+interface PrivacySettings {
+    enabledGuilds: string[]; // guilds sharing & viewing is enabled for
+    blockedUsers: string[]; // users who we shouldn't send location to
 }
 
 interface User {
     id: string;
-    username?: string;
-    location?: Location;
-    privacyRadius: number;
-    allowedGuilds: string[];
+    location?: Location; // last location, if we have it
+    duser: DiscordUser;
+    privacy: PrivacySettings;
 }
 
+// Discord stuff. Unchanging
 interface DiscordTokenResponse {
     access_token: string;
     token_type: string;
@@ -43,116 +64,76 @@ interface DiscordUser {
     avatar: string | null;
 }
 
-// Discord OAuth configuration
-const DISCORD_CLIENT_ID = '1232840493696680038';
-const DISCORD_CLIENT_SECRET = 'RJA8G9cEA4ggLAqG-fZ_GsFSTHqwzZmS';
-const DISCORD_API = 'https://discord.com/api';
+// All discord login is handled clientside so we don't need these <3
+// const DISCORD_CLIENT_ID = '...';
+// const DISCORD_CLIENT_SECRET = '...';
 
 // In-memory store for demo
 const users: Record<string, User> = {};
 
-// Handle Discord OAuth login
-app.post('/login/discord', async (req: Request, res: Response) => {
-    const { code, code_verifier } = req.body;
-
-    try {
-        console.log({
-            code, code_verifier
-        })
-        // Exchange code for token
-        const tokenResponse = await fetch(`${DISCORD_API}/oauth2/token`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                client_id: DISCORD_CLIENT_ID,
-                client_secret: DISCORD_CLIENT_SECRET,
-                code: code,
-                code_verifier: code_verifier,
-                grant_type: 'authorization_code',
-                redirect_uri: 'miniworld://redirect'
-            })
-        });
-
-        const tokenData = await tokenResponse.json() as DiscordTokenResponse;
-
-        if (!tokenResponse.ok) {
-            console.error('Token exchange failed:', tokenData);
-            res.status(400).json({ error: 'Failed to exchange code for token' });
-            return;
-        }
-
-        // Get user info using the access token
-        const userResponse = await fetch(`${DISCORD_API}/users/@me`, {
-            headers: {
-                Authorization: `Bearer ${tokenData.access_token}`
-            }
-        });
-
-        const userData = await userResponse.json() as DiscordUser;
-
-        if (!userResponse.ok) {
-            console.error('Failed to get user data:', userData);
-            res.status(400).json({ error: 'Failed to get user data' });
-            return;
-        }
-
-        // Store user info
-        users[userData.id] = {
-            id: userData.id,
-            username: userData.username,
-            privacyRadius: 1000,
-            allowedGuilds: []
-        };
-
-        // Return session token (in this case, just using the Discord user ID as the session)
-        res.json({
-            session: userData.id,
-            user: {
-                id: userData.id,
-                username: userData.username
-            }
-        });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
 // Middleware to verify Discord token
-const verifyToken = (req: Request, res: Response, next: NextFunction): void => {
+const verifyToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = req.headers.authorization;
+    console.log('verify: token', token);
     if (!token) {
+        console.log('verify: no token provided');
         res.status(401).json({ error: 'No token provided' });
         return;
     }
-    // For now, just check if the user exists in our store
-    const user = users[token];
-    if (!user) {
-        res.status(401).json({ error: 'Invalid token' });
+
+    // First check our in-memory cache
+    const cachedUser = users[token];
+    if (cachedUser) {
+        console.log('verify: cached user', cachedUser);
+        req.user = cachedUser;
+        next();
         return;
     }
-    req.headers['user-id'] = token;
-    next();
+
+    // If not in cache, validate with Discord & store
+    try {
+        const userResponse = await fetch(`${DISCORD_API}/users/@me`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+
+        if (!userResponse.ok) {
+            const error = await userResponse.json();
+            console.log('verify: invalid token', error);
+            res.status(401).json({ error: 'Invalid token' });
+            return;
+        }
+
+        const userData = await userResponse.json() as DiscordUser;
+
+        // Store user in our cache
+        const user = {
+            id: userData.id,
+            duser: userData,
+            privacy: {
+                enabledGuilds: [],
+                blockedUsers: []
+            }
+        };
+        users[userData.id] = user;
+        req.user = user;
+        next();
+    } catch (error) {
+        console.error('Token verification error:', error);
+        res.status(401).json({ error: 'Failed to verify token' });
+    }
 };
 
 // Get locations of all users we have access to see
 app.get('/locations', verifyToken, (req: Request, res: Response): void => {
-    const userId = req.headers['user-id'] as string;
-    const user = users[userId];
-
-    if (!user) {
-        res.status(404).json({ error: 'User not found' });
-        return;
-    }
+    const user = req.user!;
 
     // Filter users based on guild membership and privacy settings
     const visibleUsers = Object.values(users).filter(otherUser => {
         // Check if users share any guilds
-        const sharedGuilds = user.allowedGuilds.filter(guild =>
-            otherUser.allowedGuilds.includes(guild)
+        const sharedGuilds = user.privacy.enabledGuilds.filter(guild =>
+            otherUser.privacy.enabledGuilds.includes(guild)
         );
 
         return sharedGuilds.length > 0;
@@ -162,36 +143,139 @@ app.get('/locations', verifyToken, (req: Request, res: Response): void => {
 });
 
 // Update user's location
-app.post('/location', verifyToken, (req: Request, res: Response): void => {
-    const userId = req.headers['user-id'] as string;
+app.post('/locations', verifyToken, (req: Request, res: Response): void => {
+    const user = req.user!;
     const location: Location = req.body;
 
-    if (!users[userId]) {
-        users[userId] = {
-            id: userId,
-            privacyRadius: 1000, // Default 1km
-            allowedGuilds: [],
-        };
-    }
-
-    users[userId].location = location;
+    user.location = location;
     res.json({ success: true });
 });
 
 // Update privacy settings
 app.post('/privacy', verifyToken, (req: Request, res: Response): void => {
-    const userId = req.headers['user-id'] as string;
-    const { privacyRadius, allowedGuilds } = req.body;
+    console.log('privacy: got request');
+    const user = req.user!;
+    const { enabledGuilds, blockedUsers } = req.body;
 
-    if (!users[userId]) {
-        res.status(404).json({ error: 'User not found' });
+    user.privacy = {
+        enabledGuilds,
+        blockedUsers
+    };
+    console.log(`Updated privacy for ${user.id}:`, user.privacy);
+
+    res.json({ success: true });
+});
+
+// Token exchange endpoint
+app.post('/token', async (req: Request, res: Response): Promise<void> => {
+    console.log('Token exchange request received:', {
+        code: req.body.code ? '[REDACTED]' : undefined,
+        code_verifier: req.body.code_verifier ? '[PRESENT]' : undefined,
+        redirect_uri: req.body.redirect_uri
+    });
+
+    const { code, code_verifier, redirect_uri } = req.body;
+
+    if (!code || !code_verifier || !redirect_uri) {
+        console.error('Missing required parameters:', { code: !!code, code_verifier: !!code_verifier, redirect_uri: !!redirect_uri });
+        res.status(400).json({ error: 'Missing required parameters' });
         return;
     }
 
-    users[userId].privacyRadius = privacyRadius;
-    users[userId].allowedGuilds = allowedGuilds;
+    try {
+        // Exchange the code for a token with Discord
+        const tokenResponse = await fetch(`${DISCORD_API}/oauth2/token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                client_id: DISCORD_CLIENT_ID,
+                client_secret: DISCORD_CLIENT_SECRET,
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri,
+                code_verifier
+            })
+        });
 
-    res.json({ success: true });
+        const tokenData = await tokenResponse.text();
+        console.log('Discord token response status:', tokenResponse.status);
+
+        if (!tokenResponse.ok) {
+            console.error('Discord token exchange failed:', {
+                status: tokenResponse.status,
+                response: tokenData
+            });
+            res.status(tokenResponse.status).json({
+                error: 'Failed to exchange token with Discord',
+                details: tokenData
+            });
+            return;
+        }
+
+        // Parse the token response
+        let parsedTokenData: DiscordTokenResponse;
+        try {
+            parsedTokenData = JSON.parse(tokenData);
+        } catch (e) {
+            console.error('Failed to parse token response:', e);
+            console.error('Raw token data:', tokenData);
+            res.status(500).json({ error: 'Invalid token response from Discord' });
+            return;
+        }
+
+        console.log('Token exchange successful');
+        res.json(parsedTokenData);
+    } catch (error) {
+        console.error('Token exchange error:', error);
+        res.status(500).json({ error: 'Internal server error during token exchange' });
+    }
+});
+
+// Token revocation endpoint
+app.post('/revoke', async (req: Request, res: Response): Promise<void> => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+
+    if (!token) {
+        console.error('No token provided for revocation');
+        res.status(400).json({ error: 'No token provided' });
+        return;
+    }
+
+    try {
+        console.log('Attempting to revoke token');
+        const revokeResponse = await fetch(`${DISCORD_API}/oauth2/token/revoke`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                token,
+                client_id: DISCORD_CLIENT_ID,
+                client_secret: DISCORD_CLIENT_SECRET
+            })
+        });
+
+        if (!revokeResponse.ok) {
+            const errorData = await revokeResponse.text();
+            console.error('Token revocation failed:', {
+                status: revokeResponse.status,
+                response: errorData
+            });
+            res.status(revokeResponse.status).json({
+                error: 'Failed to revoke token',
+                details: errorData
+            });
+            return;
+        }
+
+        console.log('Token successfully revoked');
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Token revocation error:', error);
+        res.status(500).json({ error: 'Internal server error during token revocation' });
+    }
 });
 
 app.get('/', (req: Request, res: Response): void => {

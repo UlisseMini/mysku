@@ -4,6 +4,9 @@ import OAuthSwift
 struct SettingsView: View {
     @StateObject private var authManager = AuthManager.shared
     @State private var errorMessage: String?
+    @State private var selectedGuilds: Set<String> = []
+    @State private var blockedUsers: [String] = []
+    @State private var isSaving = false
     
     var body: some View {
         NavigationView {
@@ -35,6 +38,20 @@ struct SettingsView: View {
                                 
                                 Text(guild.name)
                                     .padding(.leading, 8)
+                                
+                                Spacer()
+                                
+                                Toggle("", isOn: Binding(
+                                    get: { selectedGuilds.contains(guild.id) },
+                                    set: { isEnabled in
+                                        if isEnabled {
+                                            selectedGuilds.insert(guild.id)
+                                        } else {
+                                            selectedGuilds.remove(guild.id)
+                                        }
+                                        savePrivacySettings()
+                                    }
+                                ))
                             }
                             .padding(.vertical, 4)
                         }
@@ -65,6 +82,31 @@ struct SettingsView: View {
                     errorMessage = error.localizedDescription
                 }
             }
+            .overlay(Group {
+                if isSaving {
+                    ProgressView()
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(8)
+                        .shadow(radius: 2)
+                }
+            })
+        }
+    }
+    
+    private func savePrivacySettings() {
+        Task {
+            isSaving = true
+            do {
+                try await authManager.updatePrivacySettings(
+                    enabledGuilds: Array(selectedGuilds),
+                    blockedUsers: blockedUsers
+                )
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isSaving = false
         }
     }
 } 

@@ -1,5 +1,6 @@
 import Foundation
-import OAuthSwift
+import CryptoKit
+import UIKit
 
 // Guild model
 struct Guild: Codable, Identifiable {
@@ -17,11 +18,9 @@ class AuthManager: ObservableObject {
   static let shared = AuthManager()
   private let tokenKey = "auth_token"
   private let clientID = "1232840493696680038"
-  private let clientSecret = "RJA8G9cEA4ggLAqG-fZ_GsFSTHqwzZmS"
   private let callbackURL = "miniworld://redirect"
-  private let backendURL = "https://7558-24-163-63-201.ngrok-free.app/"
-  private var oauthswift: OAuth2Swift?
-  private var currentCodeVerifier: String?  // Store the code verifier
+  private let backendURL = "https://d44e-2607-f598-d3a8-0-67-c4fa-8d4a-962d.ngrok-free.app"
+  private var currentCodeVerifier: String?
 
   @Published var isAuthenticated: Bool {
     willSet {
@@ -35,115 +34,115 @@ class AuthManager: ObservableObject {
     self.isAuthenticated = UserDefaults.standard.string(forKey: tokenKey) != nil
   }
 
+  // MARK: - OAuth2 PKCE Helper Functions
+
+  private func generateCodeVerifier() -> String {
+    var bytes = [UInt8](repeating: 0, count: 32)
+    _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+    return Data(bytes).base64URLEncodedString()
+  }
+
+  private func generateCodeChallenge(from verifier: String) -> String {
+    let data = Data(verifier.utf8)
+    let hash = SHA256.hash(data: data)
+    return Data(hash).base64URLEncodedString()
+  }
+
+  // MARK: - Auth Flow
+
   func login() {
-    oauthswift = OAuth2Swift(
-      consumerKey: clientID,
-      consumerSecret: clientSecret,
-      authorizeUrl: "https://discord.com/api/oauth2/authorize",
-      accessTokenUrl: "https://discord.com/api/oauth2/token",
-      responseType: "code"
-    )
-
-    oauthswift?.accessTokenBasicAuthentification = true
-
-    guard let codeVerifier = generateCodeVerifier() else {
-      print("Failed to generate code verifier")
+    // Generate PKCE code verifier and challenge
+    let codeVerifier = generateCodeVerifier()
+    self.currentCodeVerifier = codeVerifier
+    let codeChallenge = generateCodeChallenge(from: codeVerifier)
+    
+    // Construct the OAuth2 authorization URL
+    var components = URLComponents(string: "https://discord.com/api/oauth2/authorize")!
+    components.queryItems = [
+      URLQueryItem(name: "client_id", value: clientID),
+      URLQueryItem(name: "redirect_uri", value: callbackURL),
+      URLQueryItem(name: "response_type", value: "code"),
+      URLQueryItem(name: "scope", value: "identify guilds"),
+      URLQueryItem(name: "code_challenge", value: codeChallenge),
+      URLQueryItem(name: "code_challenge_method", value: "S256")
+    ]
+    
+    guard let authURL = components.url else {
+      print("Failed to create auth URL")
       return
     }
-
-    self.currentCodeVerifier = codeVerifier  // Store it for later use
-
-    guard let codeChallenge = generateCodeChallenge(codeVerifier: codeVerifier) else {
-      print("Failed to generate code challenge")
-      return
-    }
-
-    print("Starting authorization...")
-    let _ = oauthswift?.authorize(
-      withCallbackURL: callbackURL,
-      scope: "identify guilds",
-      state: "state",
-      codeChallenge: codeChallenge,
-      codeChallengeMethod: "S256",
-      codeVerifier: codeVerifier
-    ) { result in
-      switch result {
-      case .success(let (credential, _, _)):
-        // Send the code to our backend
-        print("Received code: \(credential.oauthToken)")
-        self.handleSuccessfulLogin(credential: credential)
-      case .failure(let error):
-        print("OAuth error: \(error.localizedDescription)")
-        DispatchQueue.main.async {
-          self.isAuthenticated = false
-        }
-      }
+    
+    // Open the URL in the system browser
+    DispatchQueue.main.async {
+      UIApplication.shared.open(authURL)
     }
   }
 
-  private func handleSuccessfulLogin(credential: OAuthSwiftCredential) {
-    print("Starting handleSuccessfulLogin...")
-    print("OAuth Token: \(credential.oauthToken)")
-
-    Task {
-      do {
-        guard let url = URL(string: "https://discord.com/api/users/@me") else {
-          print("Failed to construct Discord API URL")
-          return
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(credential.oauthToken)", forHTTPHeaderField: "Authorization")
-
-        print("Making request to Discord API...")
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-          print("Failed to get user data. Status code: \(httpResponse.statusCode)")
-          print("Response: \(String(data: data, encoding: .utf8) ?? "Unable to decode response")")
-          return
-        }
-
-        let userData = try JSONDecoder().decode(DiscordUser.self, from: data)
-        print("Successfully got user data for: \(userData.username)")
-
-        // Store the access token in UserDefaults
-        await MainActor.run {
-          UserDefaults.standard.setValue(credential.oauthToken, forKey: self.tokenKey)
-          self.isAuthenticated = true
-          print("Updated UserDefaults and set isAuthenticated to true")
-        }
-      } catch {
-        print("Error during login: \(error)")
-        print("Error details: \(error.localizedDescription)")
-      }
+  func handleCallback(url: URL) {
+    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+          let code = components.queryItems?.first(where: { $0.name == "code" })?.value,
+          let codeVerifier = self.currentCodeVerifier else {
+      print("Invalid callback URL or missing code")
+      return
     }
+    
+    // Exchange the code for a token using our backend
+    let tokenURL = "\(backendURL)/token"
+    var request = URLRequest(url: URL(string: tokenURL)!)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    let body: [String: Any] = [
+      "code": code,
+      "code_verifier": codeVerifier,
+      "redirect_uri": callbackURL
+    ]
+    
+    request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+    
+    URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+      guard let self = self,
+            let data = data,
+            let tokenResponse = try? JSONDecoder().decode(TokenResponse.self, from: data) else {
+        print("Failed to get token: \(error?.localizedDescription ?? "Unknown error")")
+        return
+      }
+      
+      // Store the access token
+      DispatchQueue.main.async {
+        UserDefaults.standard.setValue(tokenResponse.access_token, forKey: self.tokenKey)
+        self.isAuthenticated = true
+      }
+    }.resume()
   }
 
-  // Discord User model
-  struct DiscordUser: Codable {
-    let id: String
-    let username: String
-    let discriminator: String
-    let avatar: String?
-    let email: String?
+  // Token response model
+  private struct TokenResponse: Codable {
+    let access_token: String
+    let token_type: String
+    let expires_in: Int
+    let scope: String
   }
 
   func logout() {
     UserDefaults.standard.removeObject(forKey: tokenKey)
     isAuthenticated = false
-
-    // Revoke token if needed
-    if let token = oauthswift?.client.credential.oauthToken {
-      oauthswift?.client.post(
-        "https://discord.com/api/oauth2/token/revoke",
-        parameters: ["token": token]
-      ) { _ in
+    
+    // Optionally revoke the token on the backend
+    if let token = UserDefaults.standard.string(forKey: tokenKey) {
+      let revokeURL = "\(backendURL)/revoke"
+      var request = URLRequest(url: URL(string: revokeURL)!)
+      request.httpMethod = "POST"
+      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+      
+      URLSession.shared.dataTask(with: request) { _, _, _ in
         print("Token revoked")
-      }
+      }.resume()
     }
   }
+
+  // MARK: - API Calls
 
   func fetchGuilds() async throws {
     guard let token = UserDefaults.standard.string(forKey: tokenKey) else {
@@ -154,7 +153,8 @@ class AuthManager: ObservableObject {
 
     guard let url = URL(string: "https://discord.com/api/users/@me/guilds") else {
       throw NSError(
-        domain: "AuthManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        domain: "AuthManager", code: 400,
+        userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
     }
 
     var request = URLRequest(url: url)
@@ -165,7 +165,8 @@ class AuthManager: ObservableObject {
 
     guard let httpResponse = response as? HTTPURLResponse else {
       throw NSError(
-        domain: "AuthManager", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        domain: "AuthManager", code: 0,
+        userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
     }
 
     guard httpResponse.statusCode == 200 else {
@@ -183,5 +184,44 @@ class AuthManager: ObservableObject {
     await MainActor.run {
       self.guilds = fetchedGuilds
     }
+  }
+
+  func updatePrivacySettings(enabledGuilds: [String], blockedUsers: [String]) async throws {
+    guard let token = UserDefaults.standard.string(forKey: tokenKey) else {
+      throw NSError(domain: "AuthManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "No auth token found"])
+    }
+
+    guard let url = URL(string: "\(backendURL)/privacy") else {
+      throw NSError(domain: "AuthManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+    let body = ["enabledGuilds": enabledGuilds, "blockedUsers": blockedUsers]
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+      throw NSError(
+        domain: "AuthManager",
+        code: (response as? HTTPURLResponse)?.statusCode ?? 500,
+        userInfo: [NSLocalizedDescriptionKey: "Failed to update privacy settings"]
+      )
+    }
+  }
+}
+
+// MARK: - Extensions
+
+extension Data {
+  func base64URLEncodedString() -> String {
+    base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-")
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
   }
 }
