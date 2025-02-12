@@ -258,6 +258,7 @@ app.post('/token', async (req: Request, res: Response): Promise<void> => {
 
 // Token revocation endpoint
 app.post('/revoke', async (req: Request, res: Response): Promise<void> => {
+    console.log('revoke: got request');
     const token = req.headers.authorization?.replace('Bearer ', '');
 
     if (!token) {

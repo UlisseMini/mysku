@@ -125,10 +125,7 @@ class AuthManager: ObservableObject {
   }
 
   func logout() {
-    UserDefaults.standard.removeObject(forKey: tokenKey)
-    isAuthenticated = false
-    
-    // Optionally revoke the token on the backend
+    // Revoke the token on the backend
     if let token = UserDefaults.standard.string(forKey: tokenKey) {
       let revokeURL = "\(backendURL)/revoke"
       var request = URLRequest(url: URL(string: revokeURL)!)
@@ -140,6 +137,10 @@ class AuthManager: ObservableObject {
         print("Token revoked")
       }.resume()
     }
+
+    // Remove the token from the user defaults
+    UserDefaults.standard.removeObject(forKey: tokenKey)
+    isAuthenticated = false
   }
 
   // MARK: - API Calls
