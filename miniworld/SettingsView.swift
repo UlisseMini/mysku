@@ -58,6 +58,74 @@ struct SettingsView: View {
                     }
                 }
                 
+                Section(header: Text("Users")) {
+                    if apiManager.users.isEmpty {
+                        Text("Loading users...")
+                            .foregroundColor(.gray)
+                    } else {
+                        let filteredUsers = apiManager.users.filter { user in
+                            user.id != apiManager.currentUser?.id
+                        }
+                        
+                        let sortedUsers = filteredUsers.sorted { user1, user2 in
+                            // Put blocked users at the bottom
+                            let isBlocked1 = blockedUsers.contains(user1.id)
+                            let isBlocked2 = blockedUsers.contains(user2.id)
+                            if isBlocked1 != isBlocked2 {
+                                return !isBlocked1
+                            }
+                            return user1.duser.username < user2.duser.username
+                        }
+                        
+                        if filteredUsers.isEmpty {
+                            Text("No other users found")
+                                .foregroundColor(.gray)
+                        } else {
+                            ForEach(sortedUsers, id: \.id) { user in
+                                HStack {
+                                    // User avatar
+                                    if let avatar = user.duser.avatar {
+                                        AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
+                                            image
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fit)
+                                                .frame(width: 40, height: 40)
+                                                .clipShape(Circle())
+                                        } placeholder: {
+                                            Circle()
+                                                .fill(Color.gray.opacity(0.3))
+                                                .frame(width: 40, height: 40)
+                                        }
+                                    } else {
+                                        Circle()
+                                            .fill(Color.gray.opacity(0.3))
+                                            .frame(width: 40, height: 40)
+                                    }
+                                    
+                                    Text(user.duser.username)
+                                        .padding(.leading, 8)
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {
+                                        if blockedUsers.contains(user.id) {
+                                            blockedUsers.removeAll { $0 == user.id }
+                                        } else {
+                                            blockedUsers.append(user.id)
+                                        }
+                                        saveUserSettings()
+                                    }) {
+                                        Text(blockedUsers.contains(user.id) ? "Unblock" : "Block")
+                                            .foregroundColor(blockedUsers.contains(user.id) ? .blue : .red)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                                .opacity(blockedUsers.contains(user.id) ? 0.6 : 1.0)
+                            }
+                        }
+                    }
+                }
+                
                 if let error = errorMessage {
                     Section {
                         Text(error)
@@ -92,11 +160,13 @@ struct SettingsView: View {
     
     private func loadData() async {
         do {
-            // Fetch guilds and current user in parallel
+            // Fetch guilds, users, and current user in parallel
             async let guildsTask = apiManager.fetchGuilds()
+            async let usersTask = apiManager.fetchUsers()
             async let userTask = apiManager.fetchCurrentUser()
             
             try await guildsTask
+            try await usersTask
             try await userTask
             
             // Update UI with user settings

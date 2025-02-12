@@ -46,6 +46,7 @@ class APIManager: ObservableObject {
     
     @Published private(set) var currentUser: User?
     @Published private(set) var guilds: [Guild] = []
+    @Published private(set) var users: [User] = []
     
     private func getAuthToken() -> String? {
         return AuthManager.shared.token
@@ -109,6 +110,13 @@ class APIManager: ObservableObject {
         }
     }
     
+    func fetchUsers() async throws {
+        let users: [User] = try await makeRequest(endpoint: "users")
+        await MainActor.run {
+            self.users = users
+        }
+    }
+    
     // MARK: - Guild Methods
     
     func fetchGuilds() async throws {
@@ -123,5 +131,6 @@ class APIManager: ObservableObject {
     func reset() {
         currentUser = nil
         guilds = []
+        users = []
     }
 } 
