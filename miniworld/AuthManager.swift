@@ -21,9 +21,19 @@ class AuthManager: ObservableObject {
   private let callbackURL = "miniworld://redirect"
   private let backendURL = "https://d44e-2607-f598-d3a8-0-67-c4fa-8d4a-962d.ngrok-free.app"
   private var currentCodeVerifier: String?
+  private var pendingCode: String?
+  private var retryCount = 0
+  private let maxRetries = 3
+  
+  private var isHandlingCallback = false {
+    didSet {
+      print("AuthManager: isHandlingCallback changed to \(isHandlingCallback)")
+    }
+  }
 
   @Published var isAuthenticated: Bool {
     willSet {
+      print("AuthManager: isAuthenticated changing from \(isAuthenticated) to \(newValue)")
       objectWillChange.send()
     }
   }
@@ -31,7 +41,9 @@ class AuthManager: ObservableObject {
   @Published var guilds: [Guild] = []
 
   init() {
-    self.isAuthenticated = UserDefaults.standard.string(forKey: tokenKey) != nil
+    let hasToken = UserDefaults.standard.string(forKey: tokenKey) != nil
+    print("AuthManager: Initializing with token present: \(hasToken)")
+    self.isAuthenticated = hasToken
   }
 
   // MARK: - OAuth2 PKCE Helper Functions
@@ -51,8 +63,16 @@ class AuthManager: ObservableObject {
   // MARK: - Auth Flow
 
   func login() {
+    print("AuthManager: Starting login flow")
+    
+    // Reset all state
+    self.isHandlingCallback = false
+    self.pendingCode = nil
+    self.retryCount = 0
+    
     // Generate PKCE code verifier and challenge
     let codeVerifier = generateCodeVerifier()
+    print("AuthManager: Generated new code verifier")
     self.currentCodeVerifier = codeVerifier
     let codeChallenge = generateCodeChallenge(from: codeVerifier)
     
@@ -68,25 +88,25 @@ class AuthManager: ObservableObject {
     ]
     
     guard let authURL = components.url else {
-      print("Failed to create auth URL")
+      print("AuthManager: Failed to create auth URL")
       return
     }
     
+    print("AuthManager: Opening auth URL")
     // Open the URL in the system browser
     DispatchQueue.main.async {
       UIApplication.shared.open(authURL)
     }
   }
 
-  func handleCallback(url: URL) {
-    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
-          let code = components.queryItems?.first(where: { $0.name == "code" })?.value,
-          let codeVerifier = self.currentCodeVerifier else {
-      print("Invalid callback URL or missing code")
+  private func exchangeCodeForToken() {
+    guard let code = pendingCode, let codeVerifier = currentCodeVerifier else {
+      print("AuthManager: Missing code or verifier for token exchange")
+      self.isHandlingCallback = false
       return
     }
     
-    // Exchange the code for a token using our backend
+    print("AuthManager: Exchanging code for token (attempt \(retryCount + 1)/\(maxRetries))")
     let tokenURL = "\(backendURL)/token"
     var request = URLRequest(url: URL(string: tokenURL)!)
     request.httpMethod = "POST"
@@ -101,19 +121,91 @@ class AuthManager: ObservableObject {
     request.httpBody = try? JSONSerialization.data(withJSONObject: body)
     
     URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-      guard let self = self,
-            let data = data,
-            let tokenResponse = try? JSONDecoder().decode(TokenResponse.self, from: data) else {
-        print("Failed to get token: \(error?.localizedDescription ?? "Unknown error")")
+      guard let self = self else { return }
+      
+      if let error = error {
+        print("AuthManager: Token exchange failed with error: \(error)")
+        
+        // Retry on network errors if we haven't exceeded max retries
+        if (error as NSError).domain == NSURLErrorDomain,
+           self.retryCount < self.maxRetries {
+          self.retryCount += 1
+          print("AuthManager: Retrying token exchange after delay...")
+          DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.exchangeCodeForToken()
+          }
+          return
+        }
+        
+        // If we've exhausted retries or it's not a network error, reset state
+        DispatchQueue.main.async {
+          self.resetState()
+        }
         return
       }
       
+      guard let data = data else {
+        print("AuthManager: No data received from token exchange")
+        DispatchQueue.main.async {
+          self.resetState()
+        }
+        return
+      }
+      
+      if let responseStr = String(data: data, encoding: .utf8) {
+        print("AuthManager: Received token response: \(responseStr)")
+      }
+      
+      guard let tokenResponse = try? JSONDecoder().decode(TokenResponse.self, from: data) else {
+        print("AuthManager: Failed to decode token response")
+        DispatchQueue.main.async {
+          self.resetState()
+        }
+        return
+      }
+      
+      print("AuthManager: Successfully received token")
       // Store the access token
       DispatchQueue.main.async {
         UserDefaults.standard.setValue(tokenResponse.access_token, forKey: self.tokenKey)
         self.isAuthenticated = true
+        print("AuthManager: Completed login flow, isAuthenticated = true")
+        self.resetState()
       }
     }.resume()
+  }
+  
+  private func resetState() {
+    print("AuthManager: Resetting state")
+    self.isHandlingCallback = false
+    self.currentCodeVerifier = nil
+    self.pendingCode = nil
+    self.retryCount = 0
+  }
+
+  func handleCallback(url: URL) {
+    print("AuthManager: Received callback URL: \(url)")
+    
+    // Prevent duplicate callback handling
+    guard !isHandlingCallback else {
+      print("AuthManager: Already handling a callback, ignoring")
+      return
+    }
+    
+    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+          let code = components.queryItems?.first(where: { $0.name == "code" })?.value else {
+      print("AuthManager: Invalid callback URL or missing code")
+      return
+    }
+    
+    guard currentCodeVerifier != nil else {
+      print("AuthManager: Missing code verifier")
+      return
+    }
+    
+    isHandlingCallback = true
+    pendingCode = code
+    exchangeCodeForToken()
   }
 
   // Token response model
