@@ -63,11 +63,7 @@ struct SettingsView: View {
                         Text("Loading users...")
                             .foregroundColor(.gray)
                     } else {
-                        let filteredUsers = apiManager.users.filter { user in
-                            user.id != apiManager.currentUser?.id
-                        }
-                        
-                        let sortedUsers = filteredUsers.sorted { user1, user2 in
+                        let sortedUsers = apiManager.users.sorted { user1, user2 in
                             // Put blocked users at the bottom
                             let isBlocked1 = blockedUsers.contains(user1.id)
                             let isBlocked2 = blockedUsers.contains(user2.id)
@@ -77,11 +73,12 @@ struct SettingsView: View {
                             return user1.duser.username < user2.duser.username
                         }
                         
-                        if filteredUsers.isEmpty {
-                            Text("No other users found")
+                        if apiManager.users.isEmpty {
+                            Text("No users found")
                                 .foregroundColor(.gray)
                         } else {
                             ForEach(sortedUsers, id: \.id) { user in
+                                let isCurrentUser = user.id == apiManager.currentUser?.id
                                 HStack {
                                     // User avatar
                                     if let avatar = user.duser.avatar {
@@ -105,22 +102,30 @@ struct SettingsView: View {
                                     Text(user.duser.username)
                                         .padding(.leading, 8)
                                     
+                                    if isCurrentUser {
+                                        Text("(You)")
+                                            .foregroundColor(.gray)
+                                            .padding(.leading, 4)
+                                    }
+                                    
                                     Spacer()
                                     
-                                    Button(action: {
-                                        if blockedUsers.contains(user.id) {
-                                            blockedUsers.removeAll { $0 == user.id }
-                                        } else {
-                                            blockedUsers.append(user.id)
+                                    if !isCurrentUser {
+                                        Button(action: {
+                                            if blockedUsers.contains(user.id) {
+                                                blockedUsers.removeAll { $0 == user.id }
+                                            } else {
+                                                blockedUsers.append(user.id)
+                                            }
+                                            saveUserSettings()
+                                        }) {
+                                            Text(blockedUsers.contains(user.id) ? "Unblock" : "Block")
+                                                .foregroundColor(blockedUsers.contains(user.id) ? .blue : .red)
                                         }
-                                        saveUserSettings()
-                                    }) {
-                                        Text(blockedUsers.contains(user.id) ? "Unblock" : "Block")
-                                            .foregroundColor(blockedUsers.contains(user.id) ? .blue : .red)
                                     }
                                 }
                                 .padding(.vertical, 4)
-                                .opacity(blockedUsers.contains(user.id) ? 0.6 : 1.0)
+                                .opacity(isCurrentUser ? 0.6 : (blockedUsers.contains(user.id) ? 0.6 : 1.0))
                             }
                         }
                     }
