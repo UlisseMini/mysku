@@ -73,27 +73,61 @@ struct MainTabView: View {
 }
 
 struct MapView: View {
+    @StateObject private var apiManager = APIManager.shared
     @State private var position: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     ))
     
-    let people = Person.sampleData
+    var usersWithLocation: [User] {
+        apiManager.users.filter { $0.location != nil }
+    }
     
     var body: some View {
         Map(position: $position) {
-            ForEach(people) { person in
-                Annotation(coordinate: person.coordinate) {
-                    Image(systemName: "person.circle.fill")
-                        .foregroundStyle(.blue)
-                        .background(.white)
-                        .clipShape(Circle())
-                } label: {
-                    Text(person.name)
+            ForEach(usersWithLocation, id: \.id) { user in
+                if let location = user.location {
+                    let coordinate = CLLocationCoordinate2D(
+                        latitude: location.latitude,
+                        longitude: location.longitude
+                    )
+                    
+                    Annotation(coordinate: coordinate) {
+                        // Discord avatar
+                        if let avatar = user.duser.avatar {
+                            AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 40, height: 40)
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                            }
+                        } else {
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 40, height: 40)
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        }
+                    } label: {
+                        Text(user.duser.username)
+                    }
                 }
             }
         }
         .mapStyle(.standard)
+        .task {
+            do {
+                try await apiManager.fetchUsers()
+            } catch {
+                print("Error fetching users: \(error)")
+            }
+        }
     }
 }
 

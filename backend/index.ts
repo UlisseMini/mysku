@@ -145,7 +145,12 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
                 enabledGuilds: [],
                 blockedUsers: []
             },
-            location: users[userData.id]?.location
+            location: users[userData.id]?.location || {
+                // Default to San Francisco (near Union Square)
+                latitude: 37.7879,
+                longitude: -122.4075,
+                accuracy: 10
+            }
         });
 
         // Store the user and token mapping
