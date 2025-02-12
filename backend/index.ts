@@ -79,6 +79,7 @@ app.use(express.json());
 
 // In-memory store for demo
 const users: Record<string, User> = {};
+const tokenToUserId: Record<string, string> = {}; // Cache mapping tokens to user IDs
 
 // Middleware to verify Discord token
 const verifyToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -95,11 +96,11 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
     console.log('verify: attempting to validate token with Discord');
 
     try {
-        // First check our in-memory cache using the token as key
-        const cachedUser = users[token];
-        if (cachedUser) {
-            console.log('verify: found cached user:', cachedUser.id);
-            req.user = cachedUser;
+        // First check our token cache
+        const cachedUserId = tokenToUserId[token];
+        if (cachedUserId && users[cachedUserId]) {
+            console.log('verify: found cached user:', cachedUserId);
+            req.user = users[cachedUserId];
             next();
             return;
         }
@@ -140,15 +141,16 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
         const user = UserSchema.parse({
             id: userData.id,
             duser: userData,
-            privacy: {
+            privacy: users[userData.id]?.privacy || {
                 enabledGuilds: [],
                 blockedUsers: []
-            }
+            },
+            location: users[userData.id]?.location
         });
 
-        // Store the user both by token and by ID for different lookup needs
-        users[token] = user;
+        // Store the user and token mapping
         users[userData.id] = user;
+        tokenToUserId[token] = userData.id;
 
         console.log('verify: stored new user in cache:', userData.id);
         req.user = user;
@@ -209,6 +211,7 @@ app.post('/users/me', verifyToken, (req: Request, res: Response): void => {
 
 app.get('/users/me', verifyToken, (req: Request, res: Response): void => {
     const user = req.user!;
+    console.log('users/me: user:', user);
     res.json(user);
 });
 
