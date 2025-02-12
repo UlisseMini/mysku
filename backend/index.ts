@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import fetch from 'node-fetch';
+import { z } from 'zod';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -10,13 +11,54 @@ const DISCORD_CLIENT_ID = '1232840493696680038';
 const DISCORD_CLIENT_SECRET = 'RJA8G9cEA4ggLAqG-fZ_GsFSTHqwzZmS';
 const DISCORD_API = 'https://discord.com/api';
 
-// Logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-    console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
-    next();
+// Zod Schemas
+const LocationSchema = z.object({
+    latitude: z.number(),
+    longitude: z.number(),
+    accuracy: z.number() // meters; privacy radius is computed clientside
 });
 
-app.use(express.json());
+const PrivacySettingsSchema = z.object({
+    enabledGuilds: z.array(z.string()), // guilds sharing & viewing is enabled for
+    blockedUsers: z.array(z.string()) // users who we shouldn't send location to
+});
+
+const DiscordUserSchema = z.object({
+    id: z.string(),
+    username: z.string(),
+    discriminator: z.string(),
+    avatar: z.string().nullable()
+});
+
+const UserSchema = z.object({
+    id: z.string(),
+    location: LocationSchema.optional(),
+    duser: DiscordUserSchema,
+    privacy: PrivacySettingsSchema
+});
+
+const DiscordTokenResponseSchema = z.object({
+    access_token: z.string(),
+    token_type: z.string(),
+    expires_in: z.number(),
+    refresh_token: z.string(),
+    scope: z.string()
+});
+
+// Guild schemas
+const GuildSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    icon: z.string().nullable()
+});
+
+// Type inference from schemas
+type Location = z.infer<typeof LocationSchema>;
+type PrivacySettings = z.infer<typeof PrivacySettingsSchema>;
+type DiscordUser = z.infer<typeof DiscordUserSchema>;
+type User = z.infer<typeof UserSchema>;
+type DiscordTokenResponse = z.infer<typeof DiscordTokenResponseSchema>;
+type Guild = z.infer<typeof GuildSchema>;
 
 // Add type declaration for the extended Request
 declare global {
@@ -27,46 +69,13 @@ declare global {
     }
 }
 
-// API types. Could change. Ideally only by adding stuff and
-// staying backwards compatible.
-interface Location {
-    latitude: number;
-    longitude: number;
-    accuracy: number; // meters; privacy radius is computed clientside
-}
+// Logging middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+    next();
+});
 
-// Privacy settings for a user. Depending on these
-interface PrivacySettings {
-    enabledGuilds: string[]; // guilds sharing & viewing is enabled for
-    blockedUsers: string[]; // users who we shouldn't send location to
-}
-
-interface User {
-    id: string;
-    location?: Location; // last location, if we have it
-    duser: DiscordUser;
-    privacy: PrivacySettings;
-}
-
-// Discord stuff. Unchanging
-interface DiscordTokenResponse {
-    access_token: string;
-    token_type: string;
-    expires_in: number;
-    refresh_token: string;
-    scope: string;
-}
-
-interface DiscordUser {
-    id: string;
-    username: string;
-    discriminator: string;
-    avatar: string | null;
-}
-
-// All discord login is handled clientside so we don't need these <3
-// const DISCORD_CLIENT_ID = '...';
-// const DISCORD_CLIENT_SECRET = '...';
+app.use(express.json());
 
 // In-memory store for demo
 const users: Record<string, User> = {};
@@ -116,24 +125,26 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
 
         let userData: DiscordUser;
         try {
-            userData = JSON.parse(responseText);
+            const rawUserData = JSON.parse(responseText);
+            // Validate Discord user data
+            userData = DiscordUserSchema.parse(rawUserData);
             console.log('verify: got user data for:', userData.username);
         } catch (e) {
-            console.error('verify: Failed to parse user data:', e);
+            console.error('verify: Failed to parse/validate user data:', e);
             console.error('verify: Raw response:', responseText);
             res.status(500).json({ error: 'Invalid response from Discord' });
             return;
         }
 
-        // Store user in our cache using the token as key
-        const user = {
+        // Create and validate new user object
+        const user = UserSchema.parse({
             id: userData.id,
             duser: userData,
             privacy: {
                 enabledGuilds: [],
                 blockedUsers: []
             }
-        };
+        });
 
         // Store the user both by token and by ID for different lookup needs
         users[token] = user;
@@ -148,8 +159,8 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
     }
 };
 
-// Get locations of all users we have access to see
-app.get('/locations', verifyToken, (req: Request, res: Response): void => {
+// Get all users we have access to see
+app.get('/users', verifyToken, (req: Request, res: Response): void => {
     const user = req.user!;
 
     // Filter users based on guild membership and privacy settings
@@ -159,34 +170,46 @@ app.get('/locations', verifyToken, (req: Request, res: Response): void => {
             otherUser.privacy.enabledGuilds.includes(guild)
         );
 
-        return sharedGuilds.length > 0;
+        return sharedGuilds.length > 0
     });
 
     res.json(visibleUsers);
 });
 
-// Update user's location
-app.post('/locations', verifyToken, (req: Request, res: Response): void => {
-    const user = req.user!;
-    const location: Location = req.body;
+// Update user data (location, privacy settings, etc)
+app.post('/users/me', verifyToken, (req: Request, res: Response): void => {
+    const currentUser = req.user!;
 
-    user.location = location;
-    res.json({ success: true });
+    try {
+        // Validate the entire user object using Zod
+        const updatedUser = UserSchema.parse(req.body);
+
+        // Ensure the user can only update their own data
+        if (currentUser.id !== updatedUser.id) {
+            res.status(403).json({ error: 'Cannot update other users\' data' });
+            return;
+        }
+
+        // Update the user in our store
+        users[currentUser.id] = updatedUser;
+
+        console.log(`Updated user ${currentUser.id}:`, updatedUser);
+        res.json({ success: true });
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            res.status(400).json({
+                error: 'Invalid user data',
+                details: error.errors
+            });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
 });
 
-// Update privacy settings
-app.post('/privacy', verifyToken, (req: Request, res: Response): void => {
-    console.log('privacy: got request');
+app.get('/users/me', verifyToken, (req: Request, res: Response): void => {
     const user = req.user!;
-    const { enabledGuilds, blockedUsers } = req.body;
-
-    user.privacy = {
-        enabledGuilds,
-        blockedUsers
-    };
-    console.log(`Updated privacy for ${user.id}:`, user.privacy);
-
-    res.json({ success: true });
+    res.json(user);
 });
 
 // Token exchange endpoint
@@ -237,19 +260,25 @@ app.post('/token', async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        // Parse the token response
-        let parsedTokenData: DiscordTokenResponse;
         try {
-            parsedTokenData = JSON.parse(tokenData);
-        } catch (e) {
-            console.error('Failed to parse token response:', e);
-            console.error('Raw token data:', tokenData);
-            res.status(500).json({ error: 'Invalid token response from Discord' });
-            return;
+            // Parse and validate token response
+            const rawTokenData = JSON.parse(tokenData);
+            const parsedTokenData = DiscordTokenResponseSchema.parse(rawTokenData);
+            console.log('Token exchange successful');
+            res.json(parsedTokenData);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                console.error('Invalid token response format:', error.errors);
+                res.status(500).json({
+                    error: 'Invalid token response from Discord',
+                    details: error.errors
+                });
+            } else {
+                console.error('Failed to parse token response:', error);
+                console.error('Raw token data:', tokenData);
+                res.status(500).json({ error: 'Invalid token response from Discord' });
+            }
         }
-
-        console.log('Token exchange successful');
-        res.json(parsedTokenData);
     } catch (error) {
         console.error('Token exchange error:', error);
         res.status(500).json({ error: 'Internal server error during token exchange' });
@@ -299,6 +328,99 @@ app.post('/revoke', async (req: Request, res: Response): Promise<void> => {
     } catch (error) {
         console.error('Token revocation error:', error);
         res.status(500).json({ error: 'Internal server error during token revocation' });
+    }
+});
+
+// Guild endpoints
+app.get('/guilds', verifyToken, async (req: Request, res: Response): Promise<void> => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+        res.status(401).json({ error: 'No token provided' });
+        return;
+    }
+
+    try {
+        // Fetch guilds from Discord API
+        const guildsResponse = await fetch(`${DISCORD_API}/users/@me/guilds`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+
+        if (!guildsResponse.ok) {
+            const errorText = await guildsResponse.text();
+            console.error('Failed to fetch guilds from Discord:', {
+                status: guildsResponse.status,
+                response: errorText
+            });
+            res.status(guildsResponse.status).json({
+                error: 'Failed to fetch guilds from Discord',
+                details: errorText
+            });
+            return;
+        }
+
+        const rawGuilds = await guildsResponse.json();
+        const guilds = z.array(GuildSchema).parse(rawGuilds);
+        res.json(guilds);
+    } catch (error) {
+        console.error('Error fetching guilds:', error);
+        if (error instanceof z.ZodError) {
+            res.status(400).json({
+                error: 'Invalid guild data from Discord',
+                details: error.errors
+            });
+        } else {
+            res.status(500).json({ error: 'Failed to fetch guilds' });
+        }
+    }
+});
+
+// Get specific guild info
+app.get('/guilds/:guildId', verifyToken, async (req: Request, res: Response): Promise<void> => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const { guildId } = req.params;
+
+    if (!token) {
+        res.status(401).json({ error: 'No token provided' });
+        return;
+    }
+
+    try {
+        // Fetch specific guild from Discord API
+        const guildResponse = await fetch(`${DISCORD_API}/guilds/${guildId}`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+
+        if (!guildResponse.ok) {
+            const errorText = await guildResponse.text();
+            console.error(`Failed to fetch guild ${guildId} from Discord:`, {
+                status: guildResponse.status,
+                response: errorText
+            });
+            res.status(guildResponse.status).json({
+                error: 'Failed to fetch guild from Discord',
+                details: errorText
+            });
+            return;
+        }
+
+        const rawGuild = await guildResponse.json();
+        const guild = GuildSchema.parse(rawGuild);
+
+        res.json(guild);
+    } catch (error) {
+        console.error(`Error fetching guild ${guildId}:`, error);
+        if (error instanceof z.ZodError) {
+            res.status(400).json({
+                error: 'Invalid guild data from Discord',
+                details: error.errors
+            });
+        } else {
+            res.status(500).json({ error: 'Failed to fetch guild' });
+        }
     }
 });
 

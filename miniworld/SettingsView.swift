@@ -1,8 +1,8 @@
 import SwiftUI
-import OAuthSwift
 
 struct SettingsView: View {
     @StateObject private var authManager = AuthManager.shared
+    @StateObject private var apiManager = APIManager.shared
     @State private var errorMessage: String?
     @State private var selectedGuilds: Set<String> = []
     @State private var blockedUsers: [String] = []
@@ -12,11 +12,11 @@ struct SettingsView: View {
         NavigationView {
             List {
                 Section(header: Text("Discord Servers")) {
-                    if authManager.guilds.isEmpty {
+                    if apiManager.guilds.isEmpty {
                         Text("Loading servers...")
                             .foregroundColor(.gray)
                     } else {
-                        ForEach(authManager.guilds) { guild in
+                        ForEach(apiManager.guilds) { guild in
                             HStack {
                                 if let iconURL = guild.iconURL {
                                     AsyncImage(url: iconURL) { image in
@@ -49,7 +49,7 @@ struct SettingsView: View {
                                         } else {
                                             selectedGuilds.remove(guild.id)
                                         }
-                                        savePrivacySettings()
+                                        saveUserSettings()
                                     }
                                 ))
                             }
@@ -76,11 +76,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .task {
-                do {
-                    try await authManager.fetchGuilds()
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
+                await loadData()
             }
             .overlay(Group {
                 if isSaving {
@@ -94,14 +90,45 @@ struct SettingsView: View {
         }
     }
     
-    private func savePrivacySettings() {
+    private func loadData() async {
+        do {
+            // Fetch guilds and current user in parallel
+            async let guildsTask = apiManager.fetchGuilds()
+            async let userTask = apiManager.fetchCurrentUser()
+            
+            try await guildsTask
+            try await userTask
+            
+            // Update UI with user settings
+            if let user = apiManager.currentUser {
+                selectedGuilds = Set(user.privacy.enabledGuilds)
+                blockedUsers = user.privacy.blockedUsers
+            }
+            
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    private func saveUserSettings() {
+        guard let currentUser = apiManager.currentUser else { return }
+        
         Task {
             isSaving = true
             do {
-                try await authManager.updatePrivacySettings(
-                    enabledGuilds: Array(selectedGuilds),
-                    blockedUsers: blockedUsers
+                // Create updated user with new privacy settings
+                let updatedUser = User(
+                    id: currentUser.id,
+                    location: currentUser.location,
+                    duser: currentUser.duser,
+                    privacy: PrivacySettings(
+                        enabledGuilds: Array(selectedGuilds),
+                        blockedUsers: blockedUsers
+                    )
                 )
+                
+                try await apiManager.updateCurrentUser(updatedUser)
                 errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
