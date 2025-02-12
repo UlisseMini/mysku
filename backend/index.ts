@@ -73,41 +73,59 @@ const users: Record<string, User> = {};
 
 // Middleware to verify Discord token
 const verifyToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const token = req.headers.authorization;
-    console.log('verify: token', token);
-    if (!token) {
-        console.log('verify: no token provided');
-        res.status(401).json({ error: 'No token provided' });
+    const authHeader = req.headers.authorization;
+    console.log('verify: auth header:', authHeader);
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.error('verify: invalid auth header format');
+        res.status(401).json({ error: 'Invalid authorization header format' });
         return;
     }
 
-    // First check our in-memory cache
-    const cachedUser = users[token];
-    if (cachedUser) {
-        console.log('verify: cached user', cachedUser);
-        req.user = cachedUser;
-        next();
-        return;
-    }
+    const token = authHeader.split(' ')[1];
+    console.log('verify: attempting to validate token with Discord');
 
-    // If not in cache, validate with Discord & store
     try {
+        // First check our in-memory cache using the token as key
+        const cachedUser = users[token];
+        if (cachedUser) {
+            console.log('verify: found cached user:', cachedUser.id);
+            req.user = cachedUser;
+            next();
+            return;
+        }
+
+        // If not in cache, validate with Discord
         const userResponse = await fetch(`${DISCORD_API}/users/@me`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
         });
 
+        const responseText = await userResponse.text();
+        console.log('verify: Discord response status:', userResponse.status);
+
         if (!userResponse.ok) {
-            const error = await userResponse.json();
-            console.log('verify: invalid token', error);
+            console.error('verify: Discord validation failed:', {
+                status: userResponse.status,
+                response: responseText
+            });
             res.status(401).json({ error: 'Invalid token' });
             return;
         }
 
-        const userData = await userResponse.json() as DiscordUser;
+        let userData: DiscordUser;
+        try {
+            userData = JSON.parse(responseText);
+            console.log('verify: got user data for:', userData.username);
+        } catch (e) {
+            console.error('verify: Failed to parse user data:', e);
+            console.error('verify: Raw response:', responseText);
+            res.status(500).json({ error: 'Invalid response from Discord' });
+            return;
+        }
 
-        // Store user in our cache
+        // Store user in our cache using the token as key
         const user = {
             id: userData.id,
             duser: userData,
@@ -116,12 +134,17 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
                 blockedUsers: []
             }
         };
+
+        // Store the user both by token and by ID for different lookup needs
+        users[token] = user;
         users[userData.id] = user;
+
+        console.log('verify: stored new user in cache:', userData.id);
         req.user = user;
         next();
     } catch (error) {
-        console.error('Token verification error:', error);
-        res.status(401).json({ error: 'Failed to verify token' });
+        console.error('verify: Token verification error:', error);
+        res.status(500).json({ error: 'Failed to verify token' });
     }
 };
 
