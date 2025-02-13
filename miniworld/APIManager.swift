@@ -20,7 +20,7 @@ struct DiscordUser: Codable {
     let avatar: String?
 }
 
-struct User: Codable {
+struct User: Codable, Identifiable {
     let id: String
     let location: Location?
     let duser: DiscordUser
@@ -121,6 +121,15 @@ class APIManager: ObservableObject {
         guard httpResponse.statusCode == 200 else {
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
             print("📱 APIManager: Request failed (\(httpResponse.statusCode)) - \(errorMessage)")
+            
+            // Handle invalid token error
+            if httpResponse.statusCode == 401 {
+                print("📱 APIManager: Invalid token detected, triggering re-authentication")
+                Task {
+                    await AuthManager.shared.handleInvalidToken()
+                }
+            }
+            
             throw NSError(
                 domain: "APIManager",
                 code: httpResponse.statusCode,

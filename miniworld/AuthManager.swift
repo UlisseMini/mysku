@@ -202,6 +202,14 @@ class AuthManager: ObservableObject {
         }
     }
 
+    func handleInvalidToken() {
+        print("AuthManager: Handling invalid token")
+        // Remove the token from user defaults
+        UserDefaults.standard.removeObject(forKey: tokenKey)
+        isAuthenticated = false
+        APIManager.shared.reset() // Reset API state
+    }
+
     // Token response model
     private struct TokenResponse: Codable {
         let access_token: String
