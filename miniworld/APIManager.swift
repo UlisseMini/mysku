@@ -72,9 +72,11 @@ class APIManager: ObservableObject {
     @Published private(set) var users: [User] = []
     @Published private(set) var isLoading = false
     @Published private(set) var error: Error?
+    @Published var refreshInterval: TimeInterval = 30 // Default refresh interval
     
     private var loadTask: Task<Void, Never>?
     private var updateLocationTask: Task<Void, Never>?
+    private var refreshTimer: Timer?
     private var isUpdatingLocation = false
     private var isRefreshingUsers = false
     private var lastUsersFetch: Date?
@@ -85,6 +87,29 @@ class APIManager: ObservableObject {
     }
     
     // MARK: - Data Loading
+    
+    func startRefreshTimer() {
+        stopRefreshTimer()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+            Task {
+                await self?.loadInitialData()
+            }
+        }
+        print("🌐 APIManager: Started refresh timer with interval \(refreshInterval) seconds")
+    }
+    
+    func stopRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        print("🌐 APIManager: Stopped refresh timer")
+    }
+    
+    func updateRefreshInterval(_ interval: TimeInterval) {
+        refreshInterval = interval
+        if refreshTimer != nil {
+            startRefreshTimer()
+        }
+    }
     
     func loadInitialData() async {
         guard loadTask == nil else {
@@ -104,6 +129,11 @@ class APIManager: ObservableObject {
                 async let usersTask = fetchUsers()
                 
                 try await (_, _, _) = (userTask, guildsTask, usersTask)
+                
+                // Start refresh timer if not already running
+                if refreshTimer == nil {
+                    startRefreshTimer()
+                }
             } catch {
                 self.error = error
             }
@@ -219,6 +249,7 @@ class APIManager: ObservableObject {
     func reset() {
         loadTask?.cancel()
         updateLocationTask?.cancel()
+        stopRefreshTimer()
         loadTask = nil
         updateLocationTask = nil
         currentUser = nil

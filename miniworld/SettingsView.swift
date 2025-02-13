@@ -9,6 +9,14 @@ struct SettingsView: View {
     @State private var guildSearchText = ""
     @State private var userSearchText = ""
     
+    // Refresh interval options in seconds
+    private let refreshIntervals = [
+        15.0: "15 seconds",
+        30.0: "30 seconds",
+        60.0: "1 minute",
+        300.0: "5 minutes"
+    ]
+    
     var filteredGuilds: [Guild] {
         let sortedGuilds = apiManager.guilds.sorted { guild1, guild2 in
             let isEnabled1 = selectedGuilds.contains(guild1.id)
@@ -48,6 +56,24 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
+                Section {
+                    Picker("Refresh Interval", selection: Binding(
+                        get: { apiManager.refreshInterval },
+                        set: { apiManager.updateRefreshInterval($0) }
+                    )) {
+                        ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
+                            Text(refreshIntervals[interval] ?? "\(Int(interval))s")
+                                .tag(interval)
+                        }
+                    }
+                } header: {
+                    Text("REFRESH SETTINGS")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.gray)
+                        .textCase(nil)
+                }
+                
                 Section {
                     if apiManager.isLoading {
                         ProgressView()

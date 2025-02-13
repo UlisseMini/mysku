@@ -55,13 +55,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 // Now start location updates
                 requestLocationUpdate()
                 
-                // Schedule periodic updates
+                // Schedule periodic updates for our location
                 updateTimer?.invalidate()
                 updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
                     print("📍 LocationManager: Timer fired - requesting location update")
                     self?.requestLocationUpdate()
                 }
-                print("📍 LocationManager: Timer scheduled for \(updateInterval) seconds")
+                print("📍 LocationManager: Location update timer scheduled for \(updateInterval) seconds")
             }
         } else {
             print("📍 LocationManager: ⚠️ Cannot start location updates - not authorized")

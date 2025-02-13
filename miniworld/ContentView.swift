@@ -81,7 +81,7 @@ struct MapView: View {
     @StateObject private var locationManager = LocationManager.shared
     @State private var position: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
-        span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+        span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8)
     ))
     @State private var selectedUser: User?
     
@@ -224,6 +224,14 @@ struct MapView: View {
         }
         .refreshable {
             await apiManager.loadInitialData()
+        }
+        .onChange(of: locationManager.lastLocation) { newLocation in
+            if let location = newLocation {
+                position = .region(MKCoordinateRegion(
+                    center: location.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8)
+                ))
+            }
         }
     }
 }
