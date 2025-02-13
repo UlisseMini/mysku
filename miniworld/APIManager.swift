@@ -92,10 +92,28 @@ class APIManager: ObservableObject {
         stopRefreshTimer()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             Task {
+                // First try to update location if we have permission
+                do {
+                    try await LocationManager.shared.requestLocationUpdate()
+                } catch {
+                    print("🌐 APIManager: Location update failed - \(error)")
+                }
+                
+                // Then refresh data
                 await self?.loadInitialData()
             }
         }
         print("🌐 APIManager: Started refresh timer with interval \(refreshInterval) seconds")
+        
+        // Also trigger an immediate update
+        Task {
+            do {
+                try await LocationManager.shared.requestLocationUpdate()
+            } catch {
+                print("🌐 APIManager: Initial location update failed - \(error)")
+            }
+            await loadInitialData()
+        }
     }
     
     func stopRefreshTimer() {

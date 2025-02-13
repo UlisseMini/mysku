@@ -16,7 +16,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus
     
-    private var updateTimer: Timer?
     private var lastReportedLocation: CLLocation?
     private var lastUpdatePrivacyRadius: Double?  // Track privacy radius of last update
     
@@ -116,16 +115,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             } catch {
                 print("📍 LocationManager: Initial location update failed - \(error)")
             }
-            
-            // Schedule periodic updates for our location
-            updateTimer?.invalidate()
-            updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
-                print("📍 LocationManager: Timer fired - requesting location update")
-                Task {
-                    try? await self?.requestLocationUpdate()
-                }
-            }
-            print("📍 LocationManager: Location update timer scheduled for \(updateInterval) seconds")
         }
     }
     
@@ -173,10 +162,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func stopUpdatingLocation() {
         print("📍 LocationManager: Stopping location updates...")
         locationManager.stopUpdatingLocation()
-        updateTimer?.invalidate()
-        updateTimer = nil
         lastLocation = nil // Clear the last location when stopping updates
-        print("📍 LocationManager: Location updates stopped and timer invalidated")
+        print("📍 LocationManager: Location updates stopped")
     }
     
     // MARK: - CLLocationManagerDelegate
