@@ -11,14 +11,10 @@ import CoreLocation
 
 struct ContentView: View {
     @StateObject private var authManager = AuthManager.shared
-    @StateObject private var locationManager = LocationManager.shared
     
     var body: some View {
         if authManager.isAuthenticated {
             MainTabView()
-                .onAppear {
-                    locationManager.requestWhenInUseAuthorization()
-                }
         } else {
             LoginView()
         }
@@ -61,17 +57,97 @@ struct LoginView: View {
 }
 
 struct MainTabView: View {
+    @StateObject private var locationManager = LocationManager.shared
+    
     var body: some View {
-        TabView {
-            MapView()
-                .tabItem {
-                    Label("Map", systemImage: "map.fill")
+        Group {
+            if locationManager.authorizationStatus == .notDetermined {
+                LocationPermissionView()
+            } else if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
+                LocationDeniedView()
+            } else {
+                TabView {
+                    MapView()
+                        .tabItem {
+                            Label("Map", systemImage: "map.fill")
+                        }
+                    
+                    SettingsView()
+                        .tabItem {
+                            Label("Settings", systemImage: "gear")
+                        }
                 }
+            }
+        }
+    }
+}
+
+struct LocationPermissionView: View {
+    @StateObject private var locationManager = LocationManager.shared
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "location.circle.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(.tint)
             
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
+            Text("Location Access")
+                .font(.title)
+                .bold()
+            
+            Text("MiniWorld needs your location to share it with your selected Discord communities while the app is open.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            
+            Button(action: {
+                locationManager.requestWhenInUseAuthorization()
+            }) {
+                Text("Enable Location Access")
+                    .fontWeight(.semibold)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top)
+        }
+    }
+}
+
+struct LocationDeniedView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "location.slash.circle.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(.red)
+            
+            Text("Location Access Required")
+                .font(.title)
+                .bold()
+            
+            Text("MiniWorld needs location access to function properly. Please enable location access in Settings.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            
+            Button(action: {
+                if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(settingsUrl)
                 }
+            }) {
+                Text("Open Settings")
+                    .fontWeight(.semibold)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top)
         }
     }
 }
