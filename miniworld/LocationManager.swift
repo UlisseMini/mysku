@@ -9,15 +9,31 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     private let updateInterval: TimeInterval = 30 // Update every 30 seconds
     private let minimumMovementThreshold = 100.0 // Minimum movement in meters to trigger an update
-    private var lastReportedLocation: CLLocation?
+    
+    // Privacy settings
+    private var privacyAngle: Double
     
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus
     
     private var updateTimer: Timer?
-    private var isUpdating = false
+    private var lastReportedLocation: CLLocation?
+    private var lastUpdatePrivacyRadius: Double?  // Track privacy radius of last update
     
     override init() {
+        // Initialize or load privacy angle
+        if let angle = UserDefaults.standard.object(forKey: "privacyAngle") as? Double {
+            privacyAngle = angle
+        } else {
+            privacyAngle = Double.random(in: 0...(2 * .pi))
+            UserDefaults.standard.set(privacyAngle, forKey: "privacyAngle")
+        }
+        
+        // Initialize privacy radius if not set
+        if UserDefaults.standard.object(forKey: "privacyRadius") == nil {
+            UserDefaults.standard.set(2000.0, forKey: "privacyRadius") // Default 2km
+        }
+        
         authorizationStatus = locationManager.authorizationStatus
         super.init()
         print("📍 LocationManager: Initializing...")
@@ -38,6 +54,30 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         if locationManager.authorizationStatus == .authorizedWhenInUse {
             startUpdatingLocation()
         }
+    }
+    
+    private func applyPrivacyOffset(to location: CLLocation) -> CLLocation {
+        let privacyRadius = UserDefaults.standard.double(forKey: "privacyRadius")
+        
+        // If privacy radius is 0, return original location
+        if privacyRadius == 0 {
+            return location
+        }
+        
+        // Convert polar coordinates to cartesian
+        let offsetLatitude = privacyRadius * cos(privacyAngle) / 111000 // Approx meters per degree latitude
+        let offsetLongitude = privacyRadius * sin(privacyAngle) / 111000
+        
+        let newLatitude = location.coordinate.latitude + offsetLatitude
+        let newLongitude = location.coordinate.longitude + offsetLongitude
+        
+        return CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: newLatitude, longitude: newLongitude),
+            altitude: location.altitude,
+            horizontalAccuracy: max(privacyRadius, location.horizontalAccuracy),
+            verticalAccuracy: location.verticalAccuracy,
+            timestamp: location.timestamp
+        )
     }
     
     func requestWhenInUseAuthorization() {
@@ -71,33 +111,63 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
             
             // Now start location updates
-            requestLocationUpdate()
+            do {
+                try await requestLocationUpdate()
+            } catch {
+                print("📍 LocationManager: Initial location update failed - \(error)")
+            }
             
             // Schedule periodic updates for our location
             updateTimer?.invalidate()
             updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
                 print("📍 LocationManager: Timer fired - requesting location update")
-                self?.requestLocationUpdate()
+                Task {
+                    try? await self?.requestLocationUpdate()
+                }
             }
             print("📍 LocationManager: Location update timer scheduled for \(updateInterval) seconds")
         }
     }
     
-    private func requestLocationUpdate() {
-        // Early return if we don't have permission or update in progress
+    // Single async method for requesting location updates
+    func requestLocationUpdate() async throws {
+        // Early return if we don't have permission
         guard locationManager.authorizationStatus == .authorizedWhenInUse else {
             print("📍 LocationManager: Cannot request location update - not authorized")
-            return
+            throw LocationError.notAuthorized
         }
         
-        guard !isUpdating else {
-            print("📍 LocationManager: Update already in progress, skipping new update request")
-            return
+        // Get current location
+        guard let location = locationManager.location else {
+            print("📍 LocationManager: No location available")
+            throw LocationError.updateFailed
         }
         
-        isUpdating = true
-        locationManager.startUpdatingLocation()
-        print("📍 LocationManager: Location update requested")
+        // Apply privacy offset
+        let privatizedLocation = applyPrivacyOffset(to: location)
+        
+        print("📍 LocationManager: Location update - Lat: \(privatizedLocation.coordinate.latitude), Lon: \(privatizedLocation.coordinate.longitude)")
+        print("📍 LocationManager: Accuracy: \(Int(privatizedLocation.horizontalAccuracy))m")
+        
+        // Update our stored values
+        lastLocation = privatizedLocation
+        lastReportedLocation = location
+        lastUpdatePrivacyRadius = UserDefaults.standard.double(forKey: "privacyRadius")
+        
+        // Update location through APIManager
+        let newLocation = Location(
+            latitude: privatizedLocation.coordinate.latitude,
+            longitude: privatizedLocation.coordinate.longitude,
+            accuracy: privatizedLocation.horizontalAccuracy,
+            lastUpdated: Date().timeIntervalSince1970 * 1000
+        )
+        
+        try await apiManager.updateLocation(newLocation)
+    }
+    
+    enum LocationError: Error {
+        case notAuthorized
+        case updateFailed
     }
     
     func stopUpdatingLocation() {
@@ -105,7 +175,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.stopUpdatingLocation()
         updateTimer?.invalidate()
         updateTimer = nil
-        isUpdating = false
         lastLocation = nil // Clear the last location when stopping updates
         print("📍 LocationManager: Location updates stopped and timer invalidated")
     }
@@ -120,44 +189,21 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         
         guard let location = locations.last else {
-            isUpdating = false
             return
         }
         
-        // Only log significant changes in location
+        // Only update if we've moved significantly
         if let lastLocation = lastReportedLocation {
             let distance = location.distance(from: lastLocation)
             if distance < minimumMovementThreshold {
-                locationManager.stopUpdatingLocation()
-                isUpdating = false
                 return
             }
             print("📍 LocationManager: Significant movement detected: \(Int(distance))m")
         }
         
-        print("📍 LocationManager: Location update - Lat: \(location.coordinate.latitude), Lon: \(location.coordinate.longitude)")
-        print("📍 LocationManager: Accuracy: \(Int(location.horizontalAccuracy))m")
-        
-        lastLocation = location
-        lastReportedLocation = location
-        
-        // Update location through APIManager and refresh users list
+        // This is just for background updates, not our manual updates
         Task {
-            do {
-                let newLocation = Location(
-                    latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude,
-                    accuracy: location.horizontalAccuracy,
-                    lastUpdated: Date().timeIntervalSince1970 * 1000
-                )
-                
-                try await apiManager.updateLocation(newLocation)
-            } catch {
-                print("📍 LocationManager: Failed to update location - \(error)")
-            }
-            
-            locationManager.stopUpdatingLocation()
-            isUpdating = false
+            try? await requestLocationUpdate()
         }
     }
     
@@ -186,8 +232,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             print("📍 LocationManager: Non-CLError occurred: \(error)")
             print("📍 LocationManager: Detailed error: \(error)")
         }
-        
-        isUpdating = false
     }
     
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
