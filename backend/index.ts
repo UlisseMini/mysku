@@ -190,6 +190,9 @@ app.get('/users', verifyToken, (req: Request, res: Response): void => {
 
     // Filter users based on guild membership and privacy settings
     const visibleUsers = Object.values(users).filter(otherUser => {
+        // Always include the current user
+        if (otherUser.id === user.id) return true;
+
         // Check if users share any guilds
         const sharedGuilds = user.privacy.enabledGuilds.filter(guild =>
             otherUser.privacy.enabledGuilds.includes(guild)
