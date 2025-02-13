@@ -223,7 +223,7 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .task {
                 if apiManager.currentUser == nil {
-                    apiManager.loadInitialData()
+                    await apiManager.loadInitialData()
                 }
                 
                 if let user = apiManager.currentUser {
@@ -232,7 +232,7 @@ struct SettingsView: View {
                 }
             }
             .refreshable {
-                apiManager.loadInitialData()
+                await apiManager.loadInitialData()
             }
             .overlay(Group {
                 if isSaving {

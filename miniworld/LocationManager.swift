@@ -7,11 +7,15 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private let apiManager = APIManager.shared
     
+    private let updateInterval: TimeInterval = 30 // Update every 30 seconds
+    private let minimumMovementThreshold = 100.0 // Minimum movement in meters to trigger an update
+    private var lastReportedLocation: CLLocation?
+    
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     
     private var updateTimer: Timer?
-    private let updateInterval: TimeInterval = 3600 // 1 hour in seconds
+    private var isUpdating = false
     
     override init() {
         super.init()
@@ -41,19 +45,38 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         print("📍 LocationManager: Authorization status: \(locationManager.authorizationStatus.debugDescription)")
         
         if locationManager.authorizationStatus == .authorizedWhenInUse {
-            locationManager.startUpdatingLocation()
-            print("📍 LocationManager: Location updates started")
-            
-            // Schedule periodic updates
-            updateTimer?.invalidate()
-            updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
-                print("📍 LocationManager: Timer fired - requesting location update")
-                self?.locationManager.startUpdatingLocation()
+            // First ensure initial data is loaded
+            Task {
+                if apiManager.currentUser == nil {
+                    print("📍 LocationManager: Waiting for initial data load...")
+                    await apiManager.loadInitialData()
+                }
+                
+                // Now start location updates
+                requestLocationUpdate()
+                
+                // Schedule periodic updates
+                updateTimer?.invalidate()
+                updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
+                    print("📍 LocationManager: Timer fired - requesting location update")
+                    self?.requestLocationUpdate()
+                }
+                print("📍 LocationManager: Timer scheduled for \(updateInterval) seconds")
             }
-            print("📍 LocationManager: Timer scheduled for \(updateInterval) seconds")
         } else {
             print("📍 LocationManager: ⚠️ Cannot start location updates - not authorized")
         }
+    }
+    
+    private func requestLocationUpdate() {
+        guard !isUpdating else {
+            print("📍 LocationManager: Update already in progress, skipping new update request")
+            return
+        }
+        
+        isUpdating = true
+        locationManager.startUpdatingLocation()
+        print("📍 LocationManager: Location update requested")
     }
     
     func stopUpdatingLocation() {
@@ -61,36 +84,53 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.stopUpdatingLocation()
         updateTimer?.invalidate()
         updateTimer = nil
+        isUpdating = false
         print("📍 LocationManager: Location updates stopped and timer invalidated")
     }
     
     // MARK: - CLLocationManagerDelegate
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        print("📍 LocationManager: Received location update with \(locations.count) locations")
-        
         guard let location = locations.last else {
-            print("📍 LocationManager: ⚠️ No location in update")
+            isUpdating = false
             return
         }
         
-        print("📍 LocationManager: Latest location - Lat: \(location.coordinate.latitude), Lon: \(location.coordinate.longitude)")
-        print("📍 LocationManager: Accuracy: \(location.horizontalAccuracy)m, Timestamp: \(location.timestamp)")
+        // Only log significant changes in location
+        if let lastLocation = lastReportedLocation {
+            let distance = location.distance(from: lastLocation)
+            if distance < minimumMovementThreshold {
+                locationManager.stopUpdatingLocation()
+                isUpdating = false
+                return
+            }
+            print("📍 LocationManager: Significant movement detected: \(Int(distance))m")
+        }
+        
+        print("📍 LocationManager: Location update - Lat: \(location.coordinate.latitude), Lon: \(location.coordinate.longitude)")
+        print("📍 LocationManager: Accuracy: \(Int(location.horizontalAccuracy))m")
         
         lastLocation = location
+        lastReportedLocation = location
         
-        // Update location through APIManager
-        let newLocation = Location(
-            latitude: location.coordinate.latitude,
-            longitude: location.coordinate.longitude,
-            accuracy: location.horizontalAccuracy
-        )
-        
-        apiManager.updateLocation(newLocation)
-        
-        // Stop updates until next scheduled time
-        locationManager.stopUpdatingLocation()
-        print("📍 LocationManager: Stopped location updates until next scheduled update")
+        // Update location through APIManager and refresh users list
+        Task {
+            do {
+                let newLocation = Location(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude,
+                    accuracy: location.horizontalAccuracy,
+                    lastUpdated: Date().timeIntervalSince1970 * 1000
+                )
+                
+                try await apiManager.updateLocation(newLocation)
+            } catch {
+                print("📍 LocationManager: Failed to update location - \(error)")
+            }
+            
+            locationManager.stopUpdatingLocation()
+            isUpdating = false
+        }
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -105,9 +145,17 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 print("📍 LocationManager: Location services denied by user")
             case .locationUnknown:
                 print("📍 LocationManager: Location currently unavailable")
+            case .network:
+                print("📍 LocationManager: Network error occurred")
+            case .deferredAccuracyTooLow:
+                print("📍 LocationManager: Location request was cancelled - this is expected when stopping updates")
             default:
                 print("📍 LocationManager: Other CoreLocation error: \(clError.code)")
+                print("📍 LocationManager: Detailed error: \(error)")
             }
+        } else {
+            print("📍 LocationManager: Non-CLError occurred: \(error)")
+            print("📍 LocationManager: Detailed error: \(error)")
         }
     }
     

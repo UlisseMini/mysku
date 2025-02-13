@@ -15,7 +15,8 @@ const DISCORD_API = 'https://discord.com/api';
 const LocationSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
-    accuracy: z.number() // meters; privacy radius is computed clientside
+    accuracy: z.number(), // meters; privacy radius is computed clientside
+    lastUpdated: z.number() // Unix timestamp in milliseconds
 });
 
 const PrivacySettingsSchema = z.object({
@@ -183,8 +184,14 @@ app.post('/users/me', verifyToken, (req: Request, res: Response): void => {
     const currentUser = req.user!;
 
     try {
+        // Add lastUpdated to location if present
+        const body = req.body;
+        if (body.location) {
+            body.location.lastUpdated = Date.now();
+        }
+
         // Validate the entire user object using Zod
-        const updatedUser = UserSchema.parse(req.body);
+        const updatedUser = UserSchema.parse(body);
 
         // Ensure the user can only update their own data
         if (currentUser.id !== updatedUser.id) {
