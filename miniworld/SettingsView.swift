@@ -6,11 +6,49 @@ struct SettingsView: View {
     @State private var selectedGuilds: Set<String> = []
     @State private var blockedUsers: [String] = []
     @State private var isSaving = false
+    @State private var guildSearchText = ""
+    @State private var userSearchText = ""
+    
+    var filteredGuilds: [Guild] {
+        let sortedGuilds = apiManager.guilds.sorted { guild1, guild2 in
+            let isEnabled1 = selectedGuilds.contains(guild1.id)
+            let isEnabled2 = selectedGuilds.contains(guild2.id)
+            if isEnabled1 != isEnabled2 {
+                return isEnabled1
+            }
+            return guild1.name < guild2.name
+        }
+        
+        if guildSearchText.isEmpty {
+            return sortedGuilds
+        }
+        return sortedGuilds.filter { guild in
+            guild.name.localizedCaseInsensitiveContains(guildSearchText)
+        }
+    }
+    
+    var filteredUsers: [User] {
+        let sortedUsers = apiManager.users.sorted { user1, user2 in
+            let isBlocked1 = blockedUsers.contains(user1.id)
+            let isBlocked2 = blockedUsers.contains(user2.id)
+            if isBlocked1 != isBlocked2 {
+                return !isBlocked1
+            }
+            return user1.duser.username < user2.duser.username
+        }
+        
+        if userSearchText.isEmpty {
+            return sortedUsers
+        }
+        return sortedUsers.filter { user in
+            user.duser.username.localizedCaseInsensitiveContains(userSearchText)
+        }
+    }
     
     var body: some View {
         NavigationView {
             List {
-                Section(header: Text("Discord Servers")) {
+                Section {
                     if apiManager.isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity)
@@ -19,28 +57,33 @@ struct SettingsView: View {
                         Text("No servers available")
                             .foregroundColor(.gray)
                     } else {
-                        ForEach(apiManager.guilds) { guild in
-                            HStack {
+                        FilterableListView(
+                            items: filteredGuilds,
+                            searchPlaceholder: "Search servers...",
+                            searchText: $guildSearchText
+                        ) { guild in
+                            HStack(spacing: 12) {
                                 if let iconURL = guild.iconURL {
                                     AsyncImage(url: iconURL) { image in
                                         image
                                             .resizable()
                                             .aspectRatio(contentMode: .fit)
-                                            .frame(width: 40, height: 40)
+                                            .frame(width: 36, height: 36)
                                             .clipShape(Circle())
                                     } placeholder: {
                                         Circle()
                                             .fill(Color.gray.opacity(0.3))
-                                            .frame(width: 40, height: 40)
+                                            .frame(width: 36, height: 36)
                                     }
                                 } else {
                                     Circle()
                                         .fill(Color.gray.opacity(0.3))
-                                        .frame(width: 40, height: 40)
+                                        .frame(width: 36, height: 36)
                                 }
                                 
                                 Text(guild.name)
-                                    .padding(.leading, 8)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 
                                 Spacer()
                                 
@@ -55,13 +98,24 @@ struct SettingsView: View {
                                         saveUserSettings()
                                     }
                                 ))
+                                .tint(.accentColor)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, 12)
                         }
+                        .frame(height: 450)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
+                } header: {
+                    Text("DISCORD SERVERS")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.gray)
+                        .textCase(nil)
                 }
+                .padding(.bottom, 20)
                 
-                Section(header: Text("Users")) {
+                Section {
                     if apiManager.isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity)
@@ -70,45 +124,42 @@ struct SettingsView: View {
                         Text("No users available")
                             .foregroundColor(.gray)
                     } else {
-                        let sortedUsers = apiManager.users.sorted { user1, user2 in
-                            // Put blocked users at the bottom
-                            let isBlocked1 = blockedUsers.contains(user1.id)
-                            let isBlocked2 = blockedUsers.contains(user2.id)
-                            if isBlocked1 != isBlocked2 {
-                                return !isBlocked1
-                            }
-                            return user1.duser.username < user2.duser.username
-                        }
-                        
-                        ForEach(sortedUsers, id: \.id) { user in
+                        FilterableListView(
+                            items: filteredUsers,
+                            searchPlaceholder: "Search users...",
+                            searchText: $userSearchText
+                        ) { user in
                             let isCurrentUser = user.id == apiManager.currentUser?.id
-                            HStack {
-                                // User avatar
+                            HStack(spacing: 12) {
                                 if let avatar = user.duser.avatar {
                                     AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
                                         image
                                             .resizable()
                                             .aspectRatio(contentMode: .fit)
-                                            .frame(width: 40, height: 40)
+                                            .frame(width: 36, height: 36)
                                             .clipShape(Circle())
                                     } placeholder: {
                                         Circle()
                                             .fill(Color.gray.opacity(0.3))
-                                            .frame(width: 40, height: 40)
+                                            .frame(width: 36, height: 36)
                                     }
                                 } else {
                                     Circle()
                                         .fill(Color.gray.opacity(0.3))
-                                        .frame(width: 40, height: 40)
+                                        .frame(width: 36, height: 36)
                                 }
                                 
-                                Text(user.duser.username)
-                                    .padding(.leading, 8)
-                                
-                                if isCurrentUser {
-                                    Text("(You)")
-                                        .foregroundColor(.gray)
-                                        .padding(.leading, 4)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(user.duser.username)
+                                        .fontWeight(isCurrentUser ? .medium : .regular)
+                                        .lineLimit(2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    
+                                    if isCurrentUser {
+                                        Text("You")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
                                 }
                                 
                                 Spacer()
@@ -123,20 +174,35 @@ struct SettingsView: View {
                                         saveUserSettings()
                                     }) {
                                         Text(blockedUsers.contains(user.id) ? "Unblock" : "Block")
+                                            .font(.subheadline)
                                             .foregroundColor(blockedUsers.contains(user.id) ? .blue : .red)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(Color(.systemGray6))
+                                            .cornerRadius(8)
                                     }
                                 }
                             }
-                            .padding(.vertical, 4)
-                            .opacity(isCurrentUser ? 0.6 : (blockedUsers.contains(user.id) ? 0.6 : 1.0))
+                            .padding(.horizontal, 12)
+                            .opacity(isCurrentUser ? 0.8 : (blockedUsers.contains(user.id) ? 0.6 : 1.0))
                         }
+                        .frame(height: 450)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
+                } header: {
+                    Text("USERS")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.gray)
+                        .textCase(nil)
                 }
                 
                 if let error = apiManager.error {
                     Section {
                         Text(error.localizedDescription)
                             .foregroundColor(.red)
+                            .font(.subheadline)
                     }
                 }
                 
@@ -144,19 +210,22 @@ struct SettingsView: View {
                     Button(action: {
                         authManager.logout()
                     }) {
-                        Text("Logout")
-                            .foregroundColor(.red)
+                        HStack {
+                            Text("Logout")
+                                .foregroundColor(.red)
+                            Spacer()
+                            Image(systemName: "arrow.right.circle.fill")
+                                .foregroundColor(.red)
+                        }
                     }
                 }
             }
             .navigationTitle("Settings")
             .task {
-                // Load initial data if needed
                 if apiManager.currentUser == nil {
                     apiManager.loadInitialData()
                 }
                 
-                // Update UI with user settings
                 if let user = apiManager.currentUser {
                     selectedGuilds = Set(user.privacy.enabledGuilds)
                     blockedUsers = user.privacy.blockedUsers
@@ -183,7 +252,6 @@ struct SettingsView: View {
         Task {
             isSaving = true
             do {
-                // Create updated user with new privacy settings
                 let updatedUser = User(
                     id: currentUser.id,
                     location: currentUser.location,
