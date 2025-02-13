@@ -54,19 +54,13 @@ struct ServerRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            if let iconURL = guild.iconURL {
-                AsyncImage(url: iconURL) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
-                } placeholder: {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 36, height: 36)
-                }
-            } else {
+            AsyncImage(url: guild.iconURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
+            } placeholder: {
                 Circle()
                     .fill(Color.gray.opacity(0.3))
                     .frame(width: 36, height: 36)
@@ -147,19 +141,13 @@ struct UserRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            if let avatar = user.duser.avatar {
-                AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
-                } placeholder: {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 36, height: 36)
-                }
-            } else {
+            AsyncImage(url: user.duser.avatarURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
+            } placeholder: {
                 Circle()
                     .fill(Color.gray.opacity(0.3))
                     .frame(width: 36, height: 36)

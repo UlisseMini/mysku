@@ -40,8 +40,6 @@ const DISCORD_CLIENT_ID = '1232840493696680038';
 const DISCORD_CLIENT_SECRET = 'RJA8G9cEA4ggLAqG-fZ_GsFSTHqwzZmS';
 const DISCORD_API = 'https://discord.com/api';
 
-const DEFAULT_AVATAR_URL = 'https://cdn.discordapp.com/embed/avatars/0.png';
-
 // Zod Schemas
 const LocationSchema = z.object({
     latitude: z.number(),
@@ -58,8 +56,7 @@ const PrivacySettingsSchema = z.object({
 const DiscordUserSchema = z.object({
     id: z.string(),
     username: z.string(),
-    discriminator: z.string(),
-    avatar: z.string().nullable().transform(val => val ?? DEFAULT_AVATAR_URL)
+    avatar: z.string().nullable().optional()
 });
 
 const UserSchema = z.object({
@@ -275,7 +272,17 @@ app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
             otherUser.privacy.enabledGuilds.includes(guild)
         );
 
-        return sharedGuilds.length > 0
+        return sharedGuilds.length > 0;
+    }).map(otherUser => {
+        // If either user has blocked the other, return user without location
+        if (user.privacy.blockedUsers.includes(otherUser.id) ||
+            otherUser.privacy.blockedUsers.includes(user.id)) {
+            return {
+                ...otherUser,
+                location: undefined
+            };
+        }
+        return otherUser;
     });
 
     res.json(visibleUsers);

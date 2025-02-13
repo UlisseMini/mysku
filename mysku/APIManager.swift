@@ -38,8 +38,20 @@ struct PrivacySettings: Codable {
 struct DiscordUser: Codable {
     let id: String
     let username: String
-    let discriminator: String
     let avatar: String?
+    
+    var avatarURL: URL? {
+        let url: URL?
+        if let avatar = avatar {
+            url = URL(string: "https://cdn.discordapp.com/avatars/\(id)/\(avatar).png")
+        } else {
+            // Default avatar URL based on user ID
+            let defaultIndex = (Int(id) ?? 0) % 5
+            url = URL(string: "https://cdn.discordapp.com/embed/avatars/\(defaultIndex).png")
+        }
+        // print("🖼️ Avatar URL for \(username): \(url?.absoluteString ?? "nil")")
+        return url
+    }
 }
 
 struct User: Codable, Identifiable {
@@ -55,8 +67,16 @@ struct Guild: Codable, Identifiable {
     let icon: String?
 
     var iconURL: URL? {
-        guard let icon = icon else { return nil }
-        return URL(string: "https://cdn.discordapp.com/icons/\(id)/\(icon).png")
+        let url: URL?
+        if let icon = icon {
+            url = URL(string: "https://cdn.discordapp.com/icons/\(id)/\(icon).png")
+        } else {
+            // Default guild icon - use first two letters of name in a colored circle
+            let encodedName = name.prefix(2).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            url = URL(string: "https://ui-avatars.com/api/?name=\(encodedName)&background=random")
+        }
+        // print("🖼️ Guild icon URL for \(name): \(url?.absoluteString ?? "nil")")
+        return url
     }
 }
 

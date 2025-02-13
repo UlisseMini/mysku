@@ -243,21 +243,14 @@ struct MapView: View {
                                     selectedUser = user
                                 }
                             }) {
-                                if let avatar = user.duser.avatar {
-                                    AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
-                                            .frame(width: 40, height: 40)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                    } placeholder: {
-                                        Circle()
-                                            .fill(Color.gray.opacity(0.3))
-                                            .frame(width: 40, height: 40)
-                                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                    }
-                                } else {
+                                AsyncImage(url: user.duser.avatarURL) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                } placeholder: {
                                     Circle()
                                         .fill(Color.gray.opacity(0.3))
                                         .frame(width: 40, height: 40)

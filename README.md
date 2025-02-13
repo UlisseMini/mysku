@@ -7,6 +7,7 @@ An app for privacy-preserving location sharing with lots of friends, alumni grou
 
 for beta review:
 - good demo mode
+- production/deployed backend
 - privacy policy?
 
 

@@ -1,55 +1,52 @@
 {
     "users/@me": {
         "demo": {
-            "id": "demo0",
-            "username": "DemoUser",
-            "discriminator": "0000",
+            "id": "1000",
+            "username": "You",
             "avatar": null
         }
     },
     "users/@me/guilds": {
         "demo": [
             {
-                "id": "demo_guild_1",
-                "name": "Friend Server 1",
-                "icon": "5fd83a9441e87e586caea1d2bea2cad9"
+                "id": "1001",
+                "name": "Alice's Group",
+                "icon": null
             },
             {
-                "id": "demo_guild_2",
-                "name": "Friend Server 2",
-                "icon": "56558d8066e884a93deee4986f5f1bfa"
+                "id": "1002",
+                "name": "Bob's Group",
+                "icon": null
             }
         ]
     },
     "db": {
         "users": {
-            "demo0": {
-                "id": "demo0",
+            "1000": {
+                "id": "1000",
                 "duser": {
-                    "id": "demo0",
-                    "username": "Demo0",
-                    "discriminator": "0000",
+                    "id": "1000",
+                    "username": "You",
                     "avatar": null
                 },
                 "privacy": {
                     "enabledGuilds": [
-                        "demo_guild_1",
-                        "demo_guild_2"
+                        "1001",
+                        "1002"
                     ],
                     "blockedUsers": []
                 }
             },
-            "demo1": {
-                "id": "demo1",
+            "1003": {
+                "id": "1003",
                 "duser": {
-                    "id": "demo1",
+                    "id": "1003",
                     "username": "Alice",
-                    "discriminator": "0001",
-                    "avatar": "b0f19e73502866a37a8906763596f38c"
+                    "avatar": null
                 },
                 "privacy": {
                     "enabledGuilds": [
-                        "demo_guild_1"
+                        "1001"
                     ],
                     "blockedUsers": []
                 },
@@ -60,17 +57,16 @@
                     "lastUpdated": 1710892800000
                 }
             },
-            "demo2": {
-                "id": "demo2",
+            "1004": {
+                "id": "1004",
                 "duser": {
-                    "id": "demo2",
+                    "id": "1004",
                     "username": "Bob",
-                    "discriminator": "0002",
-                    "avatar": "56558d8066e884a93deee4986f5f1bfa"
+                    "avatar": null
                 },
                 "privacy": {
                     "enabledGuilds": [
-                        "demo_guild_2"
+                        "1002"
                     ],
                     "blockedUsers": []
                 },
