@@ -179,36 +179,78 @@ struct MapView: View {
                     }
                     
                     Annotation(coordinate: coordinate) {
-                        Button(action: { selectedUser = user }) {
-                            // Discord avatar
-                            if let avatar = user.duser.avatar {
-                                AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .frame(width: 40, height: 40)
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                } placeholder: {
+                        ZStack(alignment: .center) {
+                            // Additional info appears above
+                            if selectedUser?.id == user.id {
+                                VStack(spacing: 4) {
+                                    Text(location.formattedTimeSinceUpdate)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(.ultraThinMaterial)
+                                        .cornerRadius(4)
+                                    
+                                    Text("\(Int(location.accuracy))m accuracy")
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(.ultraThinMaterial)
+                                        .cornerRadius(4)
+                                }
+                                .offset(y: -50) // Move info above the profile picture
+                            }
+                            
+                            // Profile picture - always centered on location
+                            Button(action: { 
+                                if selectedUser?.id == user.id {
+                                    selectedUser = nil
+                                } else {
+                                    selectedUser = user
+                                }
+                            }) {
+                                if let avatar = user.duser.avatar {
+                                    AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(width: 40, height: 40)
+                                            .clipShape(Circle())
+                                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(Color.gray.opacity(0.3))
+                                            .frame(width: 40, height: 40)
+                                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                    }
+                                } else {
                                     Circle()
                                         .fill(Color.gray.opacity(0.3))
                                         .frame(width: 40, height: 40)
                                         .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 }
-                            } else {
-                                Circle()
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 40, height: 40)
-                                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
                             }
+                            
+                            // Username with fixed position below profile picture
+                            Text(user.duser.username)
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(4)
+                                .offset(y: 35)
                         }
                     } label: {
-                        Text(user.duser.username)
+                        // Empty label since we're handling the username in the ZStack
+                        EmptyView()
                     }
                 }
             }
         }
         .mapStyle(.standard)
+        .onTapGesture {
+            selectedUser = nil
+        }
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
                 if apiManager.isLoading {
@@ -263,74 +305,6 @@ struct MapView: View {
         .sheet(isPresented: $showingLocationPermissionSheet) {
             LocationPermissionView()
                 .presentationDetents([.medium])
-        }
-        .sheet(item: $selectedUser) { user in
-            if let location = user.location {
-                NavigationView {
-                    List {
-                        Section("User") {
-                            HStack {
-                                if let avatar = user.duser.avatar {
-                                    AsyncImage(url: URL(string: "https://cdn.discordapp.com/avatars/\(user.id)/\(avatar).png")) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
-                                            .frame(width: 50, height: 50)
-                                            .clipShape(Circle())
-                                    } placeholder: {
-                                        Circle()
-                                            .fill(Color.gray.opacity(0.3))
-                                            .frame(width: 50, height: 50)
-                                    }
-                                }
-                                
-                                Text(user.duser.username)
-                                    .font(.headline)
-                            }
-                        }
-                        
-                        Section("Location") {
-                            HStack {
-                                Text("Last Updated")
-                                Spacer()
-                                Text(location.formattedTimeSinceUpdate)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            HStack {
-                                Text("Latitude")
-                                Spacer()
-                                Text(String(format: "%.6f", location.latitude))
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            HStack {
-                                Text("Longitude")
-                                Spacer()
-                                Text(String(format: "%.6f", location.longitude))
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            HStack {
-                                Text("Accuracy")
-                                Spacer()
-                                Text(String(format: "%.0f meters", location.accuracy))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .navigationTitle("User Details")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") {
-                                selectedUser = nil
-                            }
-                        }
-                    }
-                }
-                .presentationDetents([.medium])
-            }
         }
         .task {
             // Load initial data if needed
