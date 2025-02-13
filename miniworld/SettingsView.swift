@@ -57,24 +57,6 @@ struct SettingsView: View {
         NavigationView {
             List {
                 Section {
-                    Picker("Refresh Interval", selection: Binding(
-                        get: { apiManager.refreshInterval },
-                        set: { apiManager.updateRefreshInterval($0) }
-                    )) {
-                        ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
-                            Text(refreshIntervals[interval] ?? "\(Int(interval))s")
-                                .tag(interval)
-                        }
-                    }
-                } header: {
-                    Text("REFRESH SETTINGS")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.gray)
-                        .textCase(nil)
-                }
-                
-                Section {
                     if apiManager.isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity)
@@ -230,6 +212,24 @@ struct SettingsView: View {
                             .foregroundColor(.red)
                             .font(.subheadline)
                     }
+                }
+                
+                Section {
+                    Picker("Refresh Interval", selection: Binding(
+                        get: { apiManager.refreshInterval },
+                        set: { apiManager.updateRefreshInterval($0) }
+                    )) {
+                        ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
+                            Text(refreshIntervals[interval] ?? "\(Int(interval))s")
+                                .tag(interval)
+                        }
+                    }
+                } header: {
+                    Text("REFRESH SETTINGS")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.gray)
+                        .textCase(nil)
                 }
                 
                 Section {
