@@ -8,14 +8,12 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>ulirocks.miniworld</string>
+			<string>ulirocks.minisworld</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>miniworld</string>
 			</array>
 		</dict>
 	</array>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MiniWorld needs your location to share it with your selected Discord communities while the app is open.</string>
 </dict>
 </plist>
