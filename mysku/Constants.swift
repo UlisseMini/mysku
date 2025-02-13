@@ -5,4 +5,5 @@ enum Constants {
     static let clientID = "1232840493696680038"
     static let callbackURL = "mysku://redirect"
     static let tokenKey = "auth_token"
+    static let appName = "mysku"
 } 

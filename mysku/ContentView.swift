@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  miniworld
-//
-//  Created by Ulisse Mini on 1/26/25.
-//
-
 import SwiftUI
 import MapKit
 import CoreLocation
@@ -31,7 +24,7 @@ struct LoginView: View {
                 .font(.system(size: 60))
                 .foregroundStyle(.tint)
             
-            Text("MiniWorld")
+            Text(Constants.appName.capitalized)
                 .font(.largeTitle)
                 .bold()
             
@@ -127,7 +120,7 @@ struct LocationPermissionView: View {
                 .font(.title)
                 .bold()
             
-            Text("MiniWorld needs your location to share it with your selected Discord communities while the app is open.")
+            Text("\(Constants.appName.capitalized) needs your location to share it with your selected Discord communities while the app is open.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
@@ -165,7 +158,7 @@ struct LocationDeniedView: View {
                 .font(.title)
                 .bold()
             
-            Text("MiniWorld needs location access to function properly. Please enable location access in Settings.")
+            Text("\(Constants.appName.capitalized) needs location access to function properly. Please enable location access in Settings.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)

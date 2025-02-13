@@ -10,10 +10,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>ulirocks.minisworld</string>
+			<string>ulirocks.mysku</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>miniworld</string>
+				<string>mysku</string>
 			</array>
 		</dict>
 	</array>
