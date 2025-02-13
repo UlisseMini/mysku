@@ -1,14 +1,18 @@
-## miniworld
+# mysku
 
 An app for privacy-preserving location sharing with lots of friends, alumni groups, etc.
 
 
 ### things needed for app store
 
-- images
-- demo mode
-- privacy policy
+for beta review:
+- good demo mode
+- privacy policy?
+
+
+for app store:
 - description etc. fields
+- app images for storefront
 
 
 ### notes to not forget
