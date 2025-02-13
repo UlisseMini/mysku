@@ -1,7 +1,14 @@
 import express from 'express';
-import type { Request, Response, NextFunction } from 'express';
-import fetch from 'node-fetch';
+import type { Request, Response as ExpressResponse, NextFunction } from 'express';
+import fetch, { Response as FetchResponse, RequestInit } from 'node-fetch';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 
 // Cache interfaces and implementations
 interface CacheEntry<T> {
@@ -33,6 +40,8 @@ const DISCORD_CLIENT_ID = '1232840493696680038';
 const DISCORD_CLIENT_SECRET = 'RJA8G9cEA4ggLAqG-fZ_GsFSTHqwzZmS';
 const DISCORD_API = 'https://discord.com/api';
 
+const DEFAULT_AVATAR_URL = 'https://cdn.discordapp.com/embed/avatars/0.png';
+
 // Zod Schemas
 const LocationSchema = z.object({
     latitude: z.number(),
@@ -50,7 +59,7 @@ const DiscordUserSchema = z.object({
     id: z.string(),
     username: z.string(),
     discriminator: z.string(),
-    avatar: z.string().nullable()
+    avatar: z.string().nullable().transform(val => val ?? DEFAULT_AVATAR_URL)
 });
 
 const UserSchema = z.object({
@@ -75,6 +84,22 @@ const GuildSchema = z.object({
     icon: z.string().nullable()
 });
 
+// Demo data schema (defined after other schemas it depends on)
+const DemoDataSchema = z.object({
+    'users/@me': z.object({
+        demo: DiscordUserSchema
+    }),
+    'users/@me/guilds': z.object({
+        demo: z.array(GuildSchema)
+    }),
+    'db': z.object({
+        users: z.record(UserSchema)
+    })
+});
+
+type DemoData = z.infer<typeof DemoDataSchema>;
+type DemoApiPath = keyof DemoData;
+
 // Type inference from schemas
 type Location = z.infer<typeof LocationSchema>;
 type PrivacySettings = z.infer<typeof PrivacySettingsSchema>;
@@ -93,7 +118,7 @@ declare global {
 }
 
 // Logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: Request, res: ExpressResponse, next: NextFunction) => {
     console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
     next();
 });
@@ -104,8 +129,64 @@ app.use(express.json());
 const users: Record<string, User> = {};
 const tokenToUserId: Record<string, string> = {}; // Cache mapping tokens to user IDs
 
+// Fetch demo data, validate it, merge demo users into the users store
+const rawDemoData = JSON.parse(fs.readFileSync(path.join(__dirname, 'demo-mode.json'), 'utf-8'));
+const demoData = DemoDataSchema.parse(rawDemoData);
+Object.values(demoData.db.users).forEach(demoUser => {
+    users[demoUser.id] = UserSchema.parse(demoUser);
+});
+
+
+// Demo mode constants
+const DEMO_TOKEN_RESPONSE = {
+    access_token: 'demo',
+    token_type: 'Bearer',
+    expires_in: 604800, // 7 days in seconds
+    refresh_token: 'demo_refresh',
+    scope: 'identify guilds'
+};
+
+// Initialize demo token mapping
+tokenToUserId['demo'] = 'demo0';
+
+// Utility function for Discord API calls with demo mode support
+async function discordFetch(apiPath: string, token: string, options: RequestInit = {}): Promise<FetchResponse> {
+    if (token === 'demo') {
+        // Handle demo mode
+        if (!isDemoApiPath(apiPath)) {
+            throw new Error(`No demo data available for path: ${apiPath}`);
+        }
+        const demoResponse = demoData[apiPath]?.demo;
+        if (!demoResponse) {
+            throw new Error(`No demo data available for path: ${apiPath}`);
+        }
+
+        // Create a mock Response object that matches FetchResponse interface
+        const mockResponse = new FetchResponse(JSON.stringify(demoResponse), {
+            status: 200,
+            statusText: 'OK'
+        });
+
+        return mockResponse;
+    }
+
+    // Real Discord API call
+    const url = `${DISCORD_API}/${apiPath}`;
+    const headers = {
+        ...options.headers,
+        Authorization: `Bearer ${token}`
+    };
+
+    return fetch(url, { ...options, headers });
+}
+
+// Type guard for demo API paths
+function isDemoApiPath(path: string): path is keyof Pick<DemoData, 'users/@me' | 'users/@me/guilds'> {
+    return path === 'users/@me' || path === 'users/@me/guilds';
+}
+
 // Middleware to verify Discord token
-const verifyToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunction): Promise<void> => {
     const authHeader = req.headers.authorization;
     console.log('verify: auth header:', authHeader);
 
@@ -129,11 +210,7 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
         }
 
         // If not in cache, validate with Discord
-        const userResponse = await fetch(`${DISCORD_API}/users/@me`, {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        });
+        const userResponse = await discordFetch('users/@me', token);
 
         const responseText = await userResponse.text();
         console.log('verify: Discord response status:', userResponse.status);
@@ -185,7 +262,7 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction): Pro
 };
 
 // Get all users we have access to see
-app.get('/users', verifyToken, (req: Request, res: Response): void => {
+app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
 
     // Filter users based on guild membership and privacy settings
@@ -202,7 +279,7 @@ app.get('/users', verifyToken, (req: Request, res: Response): void => {
 });
 
 // Update user data (location, privacy settings, etc)
-app.post('/users/me', verifyToken, (req: Request, res: Response): void => {
+app.post('/users/me', verifyToken, (req: Request, res: ExpressResponse): void => {
     const currentUser = req.user!;
 
     try {
@@ -224,10 +301,10 @@ app.post('/users/me', verifyToken, (req: Request, res: Response): void => {
         // Update the user in our store
         users[currentUser.id] = updatedUser;
 
-        console.log(`Updated user ${currentUser.id}:`, updatedUser);
         res.json({ success: true });
     } catch (error) {
         if (error instanceof z.ZodError) {
+            console.error('POST users/me: invalid user data:', error.errors);
             res.status(400).json({
                 error: 'Invalid user data',
                 details: error.errors
@@ -238,14 +315,14 @@ app.post('/users/me', verifyToken, (req: Request, res: Response): void => {
     }
 });
 
-app.get('/users/me', verifyToken, (req: Request, res: Response): void => {
+app.get('/users/me', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
-    console.log('users/me: user:', user);
+    console.debug('users/me: user:', user);
     res.json(user);
 });
 
 // Token exchange endpoint
-app.post('/token', async (req: Request, res: Response): Promise<void> => {
+app.post('/token', async (req: Request, res: ExpressResponse): Promise<void> => {
     console.log('Token exchange request received:', {
         code: req.body.code ? '[REDACTED]' : undefined,
         code_verifier: req.body.code_verifier ? '[PRESENT]' : undefined,
@@ -253,6 +330,13 @@ app.post('/token', async (req: Request, res: Response): Promise<void> => {
     });
 
     const { code, code_verifier, redirect_uri } = req.body;
+
+    // Handle demo mode
+    if (code === 'demo') {
+        console.log('Demo mode token exchange');
+        res.json(DEMO_TOKEN_RESPONSE);
+        return;
+    }
 
     if (!code || !code_verifier || !redirect_uri) {
         console.error('Missing required parameters:', { code: !!code, code_verifier: !!code_verifier, redirect_uri: !!redirect_uri });
@@ -318,13 +402,20 @@ app.post('/token', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Token revocation endpoint
-app.post('/revoke', async (req: Request, res: Response): Promise<void> => {
+app.post('/revoke', async (req: Request, res: ExpressResponse): Promise<void> => {
     console.log('revoke: got request');
     const token = req.headers.authorization?.replace('Bearer ', '');
 
     if (!token) {
         console.error('No token provided for revocation');
         res.status(400).json({ error: 'No token provided' });
+        return;
+    }
+
+    // Handle demo mode
+    if (token === 'demo') {
+        console.log('Demo mode token revocation - no action needed');
+        res.json({ success: true });
         return;
     }
 
@@ -364,7 +455,7 @@ app.post('/revoke', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Guild endpoints
-app.get('/guilds', verifyToken, async (req: Request, res: Response): Promise<void> => {
+app.get('/guilds', verifyToken, async (req: Request, res: ExpressResponse): Promise<void> => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = req.user!;
 
@@ -383,11 +474,7 @@ app.get('/guilds', verifyToken, async (req: Request, res: Response): Promise<voi
         }
 
         // Fetch guilds from Discord API if cache miss or expired
-        const guildsResponse = await fetch(`${DISCORD_API}/users/@me/guilds`, {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        });
+        const guildsResponse = await discordFetch('users/@me/guilds', token);
 
         if (!guildsResponse.ok) {
             const errorText = await guildsResponse.text();
@@ -425,7 +512,7 @@ app.get('/guilds', verifyToken, async (req: Request, res: Response): Promise<voi
     }
 });
 
-app.get('/', (req: Request, res: Response): void => {
+app.get('/', (req: Request, res: ExpressResponse): void => {
     res.json({ message: 'Hello World!' });
 });
 
