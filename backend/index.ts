@@ -3,6 +3,28 @@ import type { Request, Response, NextFunction } from 'express';
 import fetch from 'node-fetch';
 import { z } from 'zod';
 
+// Cache interfaces and implementations
+interface CacheEntry<T> {
+    data: T;
+    timestamp: number;
+}
+
+interface Cache {
+    guilds: Record<string, CacheEntry<Guild[]>>;
+    userGuilds: Record<string, CacheEntry<Guild>>;
+}
+
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const cache: Cache = {
+    guilds: {},
+    userGuilds: {}
+};
+
+function isCacheValid<T>(entry?: CacheEntry<T>): boolean {
+    if (!entry) return false;
+    return Date.now() - entry.timestamp < CACHE_TTL;
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -344,13 +366,23 @@ app.post('/revoke', async (req: Request, res: Response): Promise<void> => {
 // Guild endpoints
 app.get('/guilds', verifyToken, async (req: Request, res: Response): Promise<void> => {
     const token = req.headers.authorization?.split(' ')[1];
+    const user = req.user!;
+
     if (!token) {
         res.status(401).json({ error: 'No token provided' });
         return;
     }
 
     try {
-        // Fetch guilds from Discord API
+        // Check cache first
+        const cachedGuilds = cache.guilds[user.id];
+        if (isCacheValid(cachedGuilds)) {
+            console.log('Returning cached guilds for user:', user.id);
+            res.json(cachedGuilds.data);
+            return;
+        }
+
+        // Fetch guilds from Discord API if cache miss or expired
         const guildsResponse = await fetch(`${DISCORD_API}/users/@me/guilds`, {
             headers: {
                 Authorization: `Bearer ${token}`
@@ -372,6 +404,13 @@ app.get('/guilds', verifyToken, async (req: Request, res: Response): Promise<voi
 
         const rawGuilds = await guildsResponse.json();
         const guilds = z.array(GuildSchema).parse(rawGuilds);
+
+        // Update cache
+        cache.guilds[user.id] = {
+            data: guilds,
+            timestamp: Date.now()
+        };
+
         res.json(guilds);
     } catch (error) {
         console.error('Error fetching guilds:', error);
@@ -382,54 +421,6 @@ app.get('/guilds', verifyToken, async (req: Request, res: Response): Promise<voi
             });
         } else {
             res.status(500).json({ error: 'Failed to fetch guilds' });
-        }
-    }
-});
-
-// Get specific guild info
-app.get('/guilds/:guildId', verifyToken, async (req: Request, res: Response): Promise<void> => {
-    const token = req.headers.authorization?.split(' ')[1];
-    const { guildId } = req.params;
-
-    if (!token) {
-        res.status(401).json({ error: 'No token provided' });
-        return;
-    }
-
-    try {
-        // Fetch specific guild from Discord API
-        const guildResponse = await fetch(`${DISCORD_API}/guilds/${guildId}`, {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        });
-
-        if (!guildResponse.ok) {
-            const errorText = await guildResponse.text();
-            console.error(`Failed to fetch guild ${guildId} from Discord:`, {
-                status: guildResponse.status,
-                response: errorText
-            });
-            res.status(guildResponse.status).json({
-                error: 'Failed to fetch guild from Discord',
-                details: errorText
-            });
-            return;
-        }
-
-        const rawGuild = await guildResponse.json();
-        const guild = GuildSchema.parse(rawGuild);
-
-        res.json(guild);
-    } catch (error) {
-        console.error(`Error fetching guild ${guildId}:`, error);
-        if (error instanceof z.ZodError) {
-            res.status(400).json({
-                error: 'Invalid guild data from Discord',
-                details: error.errors
-            });
-        } else {
-            res.status(500).json({ error: 'Failed to fetch guild' });
         }
     }
 });
