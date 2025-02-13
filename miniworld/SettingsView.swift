@@ -57,11 +57,7 @@ struct SettingsView: View {
         NavigationView {
             List {
                 Section {
-                    if apiManager.isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .listRowBackground(Color.clear)
-                    } else if apiManager.guilds.isEmpty {
+                    if apiManager.guilds.isEmpty {
                         Text("No servers available")
                             .foregroundColor(.gray)
                     } else {
@@ -124,11 +120,7 @@ struct SettingsView: View {
                 .padding(.bottom, 20)
                 
                 Section {
-                    if apiManager.isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .listRowBackground(Color.clear)
-                    } else if apiManager.users.isEmpty {
+                    if apiManager.users.isEmpty {
                         Text("No users available")
                             .foregroundColor(.gray)
                     } else {
@@ -262,6 +254,15 @@ struct SettingsView: View {
             .refreshable {
                 await apiManager.loadInitialData()
             }
+            .overlay(alignment: .top) {
+                if apiManager.isLoading {
+                    ProgressView()
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(8)
+                        .shadow(radius: 2)
+                }
+            }
             .overlay(Group {
                 if isSaving {
                     ProgressView()
@@ -291,6 +292,8 @@ struct SettingsView: View {
                 )
                 
                 try await apiManager.updateCurrentUser(updatedUser)
+                // Refresh data since enabled guilds/blocked users affect visible users
+                await apiManager.loadInitialData()
             } catch {
                 // Error will be shown through APIManager.error
             }

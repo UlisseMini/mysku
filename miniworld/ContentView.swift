@@ -204,6 +204,14 @@ struct MapView: View {
         .mapStyle(.standard)
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
+                if apiManager.isLoading {
+                    ProgressView()
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(8)
+                        .shadow(radius: 2)
+                }
+                
                 if locationManager.authorizationStatus == .notDetermined {
                     Button(action: { showingLocationPermissionSheet = true }) {
                         HStack {
@@ -243,15 +251,6 @@ struct MapView: View {
                         .background(Color.red.opacity(0.8))
                         .cornerRadius(8)
                 }
-            }
-        }
-        .overlay(alignment: .center) {
-            if apiManager.isLoading {
-                ProgressView()
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(8)
-                    .shadow(radius: 2)
             }
         }
         .sheet(isPresented: $showingLocationPermissionSheet) {
