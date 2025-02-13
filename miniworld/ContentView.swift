@@ -67,7 +67,7 @@ struct LoginButton: View {
         }
         .padding(.horizontal, 40)
         .simultaneousGesture(
-            LongPressGesture(minimumDuration: 5.0)
+            LongPressGesture(minimumDuration: 3.0)
                 .onEnded { _ in
                     if isPressed { // Only show alert if still pressed
                         showingDemoAlert = true

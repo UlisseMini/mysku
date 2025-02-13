@@ -1,0 +1,86 @@
+{
+    "users/@me": {
+        "demo": {
+            "id": "demo0",
+            "username": "DemoUser",
+            "discriminator": "0000",
+            "avatar": null
+        }
+    },
+    "users/@me/guilds": {
+        "demo": [
+            {
+                "id": "demo_guild_1",
+                "name": "Friend Server 1",
+                "icon": "5fd83a9441e87e586caea1d2bea2cad9"
+            },
+            {
+                "id": "demo_guild_2",
+                "name": "Friend Server 2",
+                "icon": "56558d8066e884a93deee4986f5f1bfa"
+            }
+        ]
+    },
+    "db": {
+        "users": {
+            "demo0": {
+                "id": "demo0",
+                "duser": {
+                    "id": "demo0",
+                    "username": "Demo0",
+                    "discriminator": "0000",
+                    "avatar": null
+                },
+                "privacy": {
+                    "enabledGuilds": [
+                        "demo_guild_1",
+                        "demo_guild_2"
+                    ],
+                    "blockedUsers": []
+                }
+            },
+            "demo1": {
+                "id": "demo1",
+                "duser": {
+                    "id": "demo1",
+                    "username": "Alice",
+                    "discriminator": "0001",
+                    "avatar": "b0f19e73502866a37a8906763596f38c"
+                },
+                "privacy": {
+                    "enabledGuilds": [
+                        "demo_guild_1"
+                    ],
+                    "blockedUsers": []
+                },
+                "location": {
+                    "latitude": 37.7879,
+                    "longitude": -122.4075,
+                    "accuracy": 10,
+                    "lastUpdated": 1710892800000
+                }
+            },
+            "demo2": {
+                "id": "demo2",
+                "duser": {
+                    "id": "demo2",
+                    "username": "Bob",
+                    "discriminator": "0002",
+                    "avatar": "56558d8066e884a93deee4986f5f1bfa"
+                },
+                "privacy": {
+                    "enabledGuilds": [
+                        "demo_guild_2"
+                    ],
+                    "blockedUsers": []
+                },
+                "location": {
+                    "latitude": 37.3346,
+                    "longitude": -122.0090,
+                    "accuracy": 10,
+                    "lastUpdated": 1710892800000
+                }
+            }
+        }
+    }
+}
