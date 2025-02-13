@@ -171,6 +171,13 @@ struct MapView: View {
                         longitude: location.longitude
                     )
                     
+                    // Add accuracy circle if user is selected
+                    if selectedUser?.id == user.id {
+                        MapCircle(center: coordinate, radius: location.accuracy)
+                            .foregroundStyle(.blue.opacity(0.2))
+                            .stroke(.blue.opacity(0.4), lineWidth: 1)
+                    }
+                    
                     Annotation(coordinate: coordinate) {
                         Button(action: { selectedUser = user }) {
                             // Discord avatar
