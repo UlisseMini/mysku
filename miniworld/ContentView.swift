@@ -11,10 +11,14 @@ import CoreLocation
 
 struct ContentView: View {
     @StateObject private var authManager = AuthManager.shared
+    @StateObject private var locationManager = LocationManager.shared
     
     var body: some View {
         if authManager.isAuthenticated {
             MainTabView()
+                .onAppear {
+                    locationManager.requestWhenInUseAuthorization()
+                }
         } else {
             LoginView()
         }
@@ -74,6 +78,7 @@ struct MainTabView: View {
 
 struct MapView: View {
     @StateObject private var apiManager = APIManager.shared
+    @StateObject private var locationManager = LocationManager.shared
     @State private var position: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
@@ -121,12 +126,33 @@ struct MapView: View {
             }
         }
         .mapStyle(.standard)
-        .task {
-            do {
-                try await apiManager.fetchUsers()
-            } catch {
-                print("Error fetching users: \(error)")
+        .overlay(alignment: .center) {
+            if apiManager.isLoading {
+                ProgressView()
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(8)
+                    .shadow(radius: 2)
             }
+        }
+        .overlay(alignment: .top) {
+            if let error = apiManager.error {
+                Text(error.localizedDescription)
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(8)
+                    .padding(.top)
+            }
+        }
+        .task {
+            // Load initial data if needed
+            if apiManager.currentUser == nil {
+                apiManager.loadInitialData()
+            }
+        }
+        .refreshable {
+            apiManager.loadInitialData()
         }
     }
 }

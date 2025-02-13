@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import UIKit
 
+@MainActor
 class AuthManager: ObservableObject {
     static let shared = AuthManager()
     private let tokenKey = "auth_token"
@@ -96,70 +97,52 @@ class AuthManager: ObservableObject {
         }
         
         print("AuthManager: Exchanging code for token (attempt \(retryCount + 1)/\(maxRetries))")
-        let tokenURL = "\(backendURL)/token"
-        var request = URLRequest(url: URL(string: tokenURL)!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = [
-            "code": code,
-            "code_verifier": codeVerifier,
-            "redirect_uri": callbackURL
-        ]
-        
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self else { return }
-            
-            if let error = error {
+        Task {
+            do {
+                let tokenURL = "\(backendURL)/token"
+                var request = URLRequest(url: URL(string: tokenURL)!)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                let body: [String: Any] = [
+                    "code": code,
+                    "code_verifier": codeVerifier,
+                    "redirect_uri": callbackURL
+                ]
+                
+                request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+                
+                let (data, _) = try await URLSession.shared.data(for: request)
+                
+                if let responseStr = String(data: data, encoding: .utf8) {
+                    print("AuthManager: Received token response: \(responseStr)")
+                }
+                
+                let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+                print("AuthManager: Successfully received token")
+                
+                UserDefaults.standard.setValue(tokenResponse.access_token, forKey: self.tokenKey)
+                self.isAuthenticated = true
+                print("AuthManager: Completed login flow, isAuthenticated = true")
+                self.resetState()
+                APIManager.shared.reset() // Reset API state on new login
+                
+            } catch {
                 print("AuthManager: Token exchange failed with error: \(error)")
                 
                 if (error as NSError).domain == NSURLErrorDomain,
                    self.retryCount < self.maxRetries {
                     self.retryCount += 1
                     print("AuthManager: Retrying token exchange after delay...")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        self.exchangeCodeForToken()
-                    }
+                    try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+                    self.exchangeCodeForToken()
                     return
                 }
                 
-                DispatchQueue.main.async {
-                    self.resetState()
-                }
-                return
-            }
-            
-            guard let data = data else {
-                print("AuthManager: No data received from token exchange")
-                DispatchQueue.main.async {
-                    self.resetState()
-                }
-                return
-            }
-            
-            if let responseStr = String(data: data, encoding: .utf8) {
-                print("AuthManager: Received token response: \(responseStr)")
-            }
-            
-            guard let tokenResponse = try? JSONDecoder().decode(TokenResponse.self, from: data) else {
-                print("AuthManager: Failed to decode token response")
-                DispatchQueue.main.async {
-                    self.resetState()
-                }
-                return
-            }
-            
-            print("AuthManager: Successfully received token")
-            DispatchQueue.main.async {
-                UserDefaults.standard.setValue(tokenResponse.access_token, forKey: self.tokenKey)
-                self.isAuthenticated = true
-                print("AuthManager: Completed login flow, isAuthenticated = true")
                 self.resetState()
-                APIManager.shared.reset() // Reset API state on new login
             }
-        }.resume()
+        }
     }
     
     private func resetState() {
@@ -196,22 +179,27 @@ class AuthManager: ObservableObject {
 
     func logout() {
         // Revoke the token on the backend
-        if let token = token {
-            let revokeURL = "\(backendURL)/revoke"
-            var request = URLRequest(url: URL(string: revokeURL)!)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            
-            URLSession.shared.dataTask(with: request) { _, _, _ in
-                print("Token revoked")
-            }.resume()
-        }
+        Task {
+            if let token = token {
+                let revokeURL = "\(backendURL)/revoke"
+                var request = URLRequest(url: URL(string: revokeURL)!)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                
+                do {
+                    let (_, _) = try await URLSession.shared.data(for: request)
+                    print("Token revoked")
+                } catch {
+                    print("Failed to revoke token: \(error)")
+                }
+            }
 
-        // Remove the token from the user defaults
-        UserDefaults.standard.removeObject(forKey: tokenKey)
-        isAuthenticated = false
-        APIManager.shared.reset() // Reset API state on logout
+            // Remove the token from the user defaults
+            UserDefaults.standard.removeObject(forKey: tokenKey)
+            isAuthenticated = false
+            APIManager.shared.reset() // Reset API state on logout
+        }
     }
 
     // Token response model

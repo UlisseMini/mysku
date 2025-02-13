@@ -15,5 +15,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MiniWorld needs your location to share it with your selected Discord communities while the app is open.</string>
 </dict>
 </plist>
