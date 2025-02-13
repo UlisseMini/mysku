@@ -57,33 +57,24 @@ struct LoginView: View {
 }
 
 struct MainTabView: View {
-    @StateObject private var locationManager = LocationManager.shared
-    
     var body: some View {
-        Group {
-            if locationManager.authorizationStatus == .notDetermined {
-                LocationPermissionView()
-            } else if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
-                LocationDeniedView()
-            } else {
-                TabView {
-                    MapView()
-                        .tabItem {
-                            Label("Map", systemImage: "map.fill")
-                        }
-                    
-                    SettingsView()
-                        .tabItem {
-                            Label("Settings", systemImage: "gear")
-                        }
+        TabView {
+            MapView()
+                .tabItem {
+                    Label("Map", systemImage: "map.fill")
                 }
-            }
+            
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
         }
     }
 }
 
 struct LocationPermissionView: View {
     @StateObject private var locationManager = LocationManager.shared
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         VStack(spacing: 20) {
@@ -113,6 +104,11 @@ struct LocationPermissionView: View {
             }
             .padding(.horizontal, 40)
             .padding(.top)
+        }
+        .onChange(of: locationManager.authorizationStatus) { status in
+            if status != .notDetermined {
+                dismiss()
+            }
         }
     }
 }
@@ -160,6 +156,7 @@ struct MapView: View {
         span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8)
     ))
     @State private var selectedUser: User?
+    @State private var showingLocationPermissionSheet = false
     
     var usersWithLocation: [User] {
         apiManager.users.filter { $0.location != nil }
@@ -205,6 +202,49 @@ struct MapView: View {
             }
         }
         .mapStyle(.standard)
+        .overlay(alignment: .top) {
+            VStack(spacing: 8) {
+                if locationManager.authorizationStatus == .notDetermined {
+                    Button(action: { showingLocationPermissionSheet = true }) {
+                        HStack {
+                            Image(systemName: "location.circle.fill")
+                            Text("Enable location sharing")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                        .shadow(radius: 2)
+                    }
+                    .padding()
+                } else if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
+                    HStack {
+                        Image(systemName: "location.slash.circle.fill")
+                        Text("Location sharing disabled")
+                        Spacer()
+                        Button("Enable") {
+                            if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(settingsUrl)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(radius: 2)
+                    .padding()
+                }
+                
+                if let error = apiManager.error {
+                    Text(error.localizedDescription)
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(Color.red.opacity(0.8))
+                        .cornerRadius(8)
+                }
+            }
+        }
         .overlay(alignment: .center) {
             if apiManager.isLoading {
                 ProgressView()
@@ -214,15 +254,9 @@ struct MapView: View {
                     .shadow(radius: 2)
             }
         }
-        .overlay(alignment: .top) {
-            if let error = apiManager.error {
-                Text(error.localizedDescription)
-                    .foregroundColor(.white)
-                    .padding()
-                    .background(Color.red.opacity(0.8))
-                    .cornerRadius(8)
-                    .padding(.top)
-            }
+        .sheet(isPresented: $showingLocationPermissionSheet) {
+            LocationPermissionView()
+                .presentationDetents([.medium])
         }
         .sheet(item: $selectedUser) { user in
             if let location = user.location {

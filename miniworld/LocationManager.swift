@@ -12,12 +12,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var lastReportedLocation: CLLocation?
     
     @Published var lastLocation: CLLocation?
-    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    @Published var authorizationStatus: CLAuthorizationStatus
     
     private var updateTimer: Timer?
     private var isUpdating = false
     
     override init() {
+        authorizationStatus = locationManager.authorizationStatus
         super.init()
         print("📍 LocationManager: Initializing...")
         locationManager.delegate = self
@@ -32,43 +33,63 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         } else {
             print("📍 LocationManager: No initial location available")
         }
+        
+        // If we already have permission, start updates
+        if locationManager.authorizationStatus == .authorizedWhenInUse {
+            startUpdatingLocation()
+        }
     }
     
     func requestWhenInUseAuthorization() {
         print("📍 LocationManager: Requesting when-in-use authorization...")
         print("📍 LocationManager: Current authorization status: \(locationManager.authorizationStatus.debugDescription)")
-        locationManager.requestWhenInUseAuthorization()
+        
+        // Only request if we're in notDetermined state
+        if locationManager.authorizationStatus == .notDetermined {
+            locationManager.requestWhenInUseAuthorization()
+        } else if locationManager.authorizationStatus == .authorizedWhenInUse {
+            // If we already have permission, start updates
+            startUpdatingLocation()
+        }
     }
     
     func startUpdatingLocation() {
         print("📍 LocationManager: Starting location updates...")
         print("📍 LocationManager: Authorization status: \(locationManager.authorizationStatus.debugDescription)")
         
-        if locationManager.authorizationStatus == .authorizedWhenInUse {
-            // First ensure initial data is loaded
-            Task {
-                if apiManager.currentUser == nil {
-                    print("📍 LocationManager: Waiting for initial data load...")
-                    await apiManager.loadInitialData()
-                }
-                
-                // Now start location updates
-                requestLocationUpdate()
-                
-                // Schedule periodic updates for our location
-                updateTimer?.invalidate()
-                updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
-                    print("📍 LocationManager: Timer fired - requesting location update")
-                    self?.requestLocationUpdate()
-                }
-                print("📍 LocationManager: Location update timer scheduled for \(updateInterval) seconds")
+        // Early return if we don't have permission
+        guard locationManager.authorizationStatus == .authorizedWhenInUse else {
+            print("📍 LocationManager: Cannot start location updates - not authorized")
+            return
+        }
+        
+        // First ensure initial data is loaded
+        Task {
+            if apiManager.currentUser == nil {
+                print("📍 LocationManager: Waiting for initial data load...")
+                await apiManager.loadInitialData()
             }
-        } else {
-            print("📍 LocationManager: ⚠️ Cannot start location updates - not authorized")
+            
+            // Now start location updates
+            requestLocationUpdate()
+            
+            // Schedule periodic updates for our location
+            updateTimer?.invalidate()
+            updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
+                print("📍 LocationManager: Timer fired - requesting location update")
+                self?.requestLocationUpdate()
+            }
+            print("📍 LocationManager: Location update timer scheduled for \(updateInterval) seconds")
         }
     }
     
     private func requestLocationUpdate() {
+        // Early return if we don't have permission or update in progress
+        guard locationManager.authorizationStatus == .authorizedWhenInUse else {
+            print("📍 LocationManager: Cannot request location update - not authorized")
+            return
+        }
+        
         guard !isUpdating else {
             print("📍 LocationManager: Update already in progress, skipping new update request")
             return
@@ -85,12 +106,19 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         updateTimer?.invalidate()
         updateTimer = nil
         isUpdating = false
+        lastLocation = nil // Clear the last location when stopping updates
         print("📍 LocationManager: Location updates stopped and timer invalidated")
     }
     
     // MARK: - CLLocationManagerDelegate
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // Early return if we lost permission while updating
+        guard locationManager.authorizationStatus == .authorizedWhenInUse else {
+            stopUpdatingLocation()
+            return
+        }
+        
         guard let location = locations.last else {
             isUpdating = false
             return
@@ -143,6 +171,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             switch clError.code {
             case .denied:
                 print("📍 LocationManager: Location services denied by user")
+                stopUpdatingLocation()
             case .locationUnknown:
                 print("📍 LocationManager: Location currently unavailable")
             case .network:
@@ -157,6 +186,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             print("📍 LocationManager: Non-CLError occurred: \(error)")
             print("📍 LocationManager: Detailed error: \(error)")
         }
+        
+        isUpdating = false
     }
     
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
@@ -167,11 +198,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         case .authorizedWhenInUse:
             print("📍 LocationManager: User granted when-in-use permission")
             startUpdatingLocation()
-        case .denied:
-            print("📍 LocationManager: User denied location permission")
-            stopUpdatingLocation()
-        case .restricted:
-            print("📍 LocationManager: Location use is restricted")
+        case .denied, .restricted:
+            print("📍 LocationManager: Location use is denied or restricted")
             stopUpdatingLocation()
         case .notDetermined:
             print("📍 LocationManager: Permission not determined yet")
