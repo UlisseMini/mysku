@@ -128,9 +128,9 @@ struct SettingsView: View {
                             }
                             .padding(.horizontal, 12)
                         }
-                        .frame(height: 450)
+                        .frame(minHeight: 100, maxHeight: min(CGFloat(filteredGuilds.count * 60 + 60), 450))
                         .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                        .background(Color(uiColor: .systemBackground))
                     }
                 } header: {
                     Text("DISCORD SERVERS")
@@ -212,9 +212,9 @@ struct SettingsView: View {
                             .padding(.horizontal, 12)
                             .opacity(isCurrentUser ? 0.8 : (blockedUsers.contains(user.id) ? 0.6 : 1.0))
                         }
-                        .frame(height: 450)
+                        .frame(minHeight: 100, maxHeight: min(CGFloat(filteredUsers.count * 60 + 60), 450))
                         .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                        .background(Color(uiColor: .systemBackground))
                     }
                 } header: {
                     Text("USERS")
@@ -247,6 +247,8 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemBackground))
             .task {
                 if apiManager.currentUser == nil {
                     await apiManager.loadInitialData()
