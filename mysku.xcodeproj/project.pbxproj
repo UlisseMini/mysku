@@ -30,7 +30,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		3A653BEE2D4EF7EC00E008CB /* Exceptions for "miniworld" folder in "mysku" target */ = {
+		3A653BEE2D4EF7EC00E008CB /* Exceptions for "mysku" folder in "mysku" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -40,22 +40,22 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3A3210E42D47062200AB99BC /* miniworld */ = {
+		3A3210E42D47062200AB99BC /* mysku */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				3A653BEE2D4EF7EC00E008CB /* Exceptions for "miniworld" folder in "mysku" target */,
+				3A653BEE2D4EF7EC00E008CB /* Exceptions for "mysku" folder in "mysku" target */,
 			);
-			path = miniworld;
+			path = mysku;
 			sourceTree = "<group>";
 		};
-		3A3210F52D47062300AB99BC /* miniworldTests */ = {
+		3A3210F52D47062300AB99BC /* myskuTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = miniworldTests;
+			path = myskuTests;
 			sourceTree = "<group>";
 		};
-		3A3210FF2D47062300AB99BC /* miniworldUITests */ = {
+		3A3210FF2D47062300AB99BC /* myskuUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = miniworldUITests;
+			path = myskuUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -88,9 +88,9 @@
 		3A3210D92D47062200AB99BC = {
 			isa = PBXGroup;
 			children = (
-				3A3210E42D47062200AB99BC /* miniworld */,
-				3A3210F52D47062300AB99BC /* miniworldTests */,
-				3A3210FF2D47062300AB99BC /* miniworldUITests */,
+				3A3210E42D47062200AB99BC /* mysku */,
+				3A3210F52D47062300AB99BC /* myskuTests */,
+				3A3210FF2D47062300AB99BC /* myskuUITests */,
 				3A3210E32D47062200AB99BC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,7 +121,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3A3210E42D47062200AB99BC /* miniworld */,
+				3A3210E42D47062200AB99BC /* mysku */,
 			);
 			name = mysku;
 			packageProductDependencies = (
@@ -144,7 +144,7 @@
 				3A3210F42D47062300AB99BC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3A3210F52D47062300AB99BC /* miniworldTests */,
+				3A3210F52D47062300AB99BC /* myskuTests */,
 			);
 			name = myskuTests;
 			packageProductDependencies = (
@@ -167,7 +167,7 @@
 				3A3210FE2D47062300AB99BC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3A3210FF2D47062300AB99BC /* miniworldUITests */,
+				3A3210FF2D47062300AB99BC /* myskuUITests */,
 			);
 			name = myskuUITests;
 			packageProductDependencies = (
