@@ -151,6 +151,7 @@ struct LocationDeniedView: View {
 struct MapView: View {
     @StateObject private var apiManager = APIManager.shared
     @StateObject private var locationManager = LocationManager.shared
+    @State private var hasInitiallyCentered = false
     @State private var position: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8)
@@ -316,11 +317,12 @@ struct MapView: View {
             await apiManager.loadInitialData()
         }
         .onChange(of: locationManager.lastLocation) { newLocation in
-            if let location = newLocation {
+            if let location = newLocation, !hasInitiallyCentered {
                 position = .region(MKCoordinateRegion(
                     center: location.coordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8)
                 ))
+                hasInitiallyCentered = true
             }
         }
     }
