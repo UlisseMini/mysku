@@ -38,20 +38,61 @@ struct LoginView: View {
             Text("Connect with your community")
                 .foregroundStyle(.secondary)
             
-            Button(action: { authManager.login() }) {
-                HStack {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .imageScale(.large)
-                    Text("Continue with Discord")
-                        .fontWeight(.semibold)
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.indigo)
-                .foregroundColor(.white)
-                .cornerRadius(10)
+            LoginButton {
+                authManager.login()
             }
-            .padding(.horizontal, 40)
+        }
+    }
+}
+
+struct LoginButton: View {
+    @State private var showingDemoAlert = false
+    @State private var isPressed = false
+    
+    var onLoginTap: () -> Void
+    
+    var body: some View {
+        Button(action: {}) { // Empty action because we handle it in gesture
+            HStack {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .imageScale(.large)
+                Text("Continue with Discord")
+                    .fontWeight(.semibold)
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.indigo)
+            .foregroundColor(.white)
+            .cornerRadius(10)
+        }
+        .padding(.horizontal, 40)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 5.0)
+                .onEnded { _ in
+                    if isPressed { // Only show alert if still pressed
+                        showingDemoAlert = true
+                    }
+                }
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    isPressed = true
+                }
+                .onEnded { _ in
+                    if isPressed && !showingDemoAlert {
+                        onLoginTap()
+                    }
+                    isPressed = false
+                }
+        )
+        .alert("Continue in demo mode?", isPresented: $showingDemoAlert) {
+            Button("Yes") {
+                UserDefaults.standard.setValue("demo", forKey: "auth_token")
+                AuthManager.shared.isAuthenticated = true
+                APIManager.shared.reset()
+            }
+            Button("No", role: .cancel) {}
         }
     }
 }
