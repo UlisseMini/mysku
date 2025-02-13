@@ -5,10 +5,10 @@ import UIKit
 @MainActor
 class AuthManager: ObservableObject {
     static let shared = AuthManager()
-    private let tokenKey = "auth_token"
-    private let clientID = "1232840493696680038"
-    private let callbackURL = "miniworld://redirect"
-    private let backendURL = "https://d44e-2607-f598-d3a8-0-67-c4fa-8d4a-962d.ngrok-free.app"
+    private let tokenKey = Constants.tokenKey
+    private let clientID = Constants.clientID
+    private let callbackURL = Constants.callbackURL
+    private let backendURL = Constants.backendURL
     private var currentCodeVerifier: String?
     private var pendingCode: String?
     private var retryCount = 0

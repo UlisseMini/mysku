@@ -65,7 +65,7 @@ struct Guild: Codable, Identifiable {
 @MainActor
 class APIManager: ObservableObject {
     static let shared = APIManager()
-    private let backendURL = "https://d44e-2607-f598-d3a8-0-67-c4fa-8d4a-962d.ngrok-free.app"
+    private let backendURL = Constants.backendURL
     
     @Published private(set) var currentUser: User?
     @Published private(set) var guilds: [Guild] = []
