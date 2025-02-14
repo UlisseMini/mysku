@@ -1,17 +1,18 @@
 import express from 'express';
-import type { Request, Response as ExpressResponse, NextFunction } from 'express';
+import { Request, Response as ExpressResponse, NextFunction } from 'express';
 import fetch, { Response as FetchResponse, RequestInit } from 'node-fetch';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
 
 
 // Cache interfaces and implementations
@@ -36,15 +37,26 @@ function isCacheValid<T>(entry?: CacheEntry<T>): boolean {
     return Date.now() - entry.timestamp < CACHE_TTL;
 }
 
+// Move HTML_REDIRECTS before app initialization
+const HTML_REDIRECTS: Record<string, string> = {
+    '/privacy-policy': '/privacy-policy.html',
+    '/support': '/support.html'
+};
+
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Add static file serving before other routes
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Add redirect for /privacy-policy to /privacy-policy.html
-app.get('/privacy-policy', (req: Request, res: ExpressResponse) => {
-    res.redirect('/privacy-policy.html');
+// Add redirect handler
+app.use((req: Request, res: ExpressResponse, next: NextFunction) => {
+    const redirect = HTML_REDIRECTS[req.path];
+    if (redirect) {
+        res.redirect(redirect);
+        return;
+    }
+    next();
 });
 
 // Discord OAuth configuration
@@ -538,6 +550,10 @@ app.get('/guilds', verifyToken, async (req: Request, res: ExpressResponse): Prom
     }
 });
 
+// Start the server
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
+
+// Add explicit export to mark as ESM module
+export default app;
