@@ -5,6 +5,10 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,9 +40,13 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Discord OAuth configuration
-const DISCORD_CLIENT_ID = '1232840493696680038';
-const DISCORD_CLIENT_SECRET = 'RJA8G9cEA4ggLAqG-fZ_GsFSTHqwzZmS';
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const DISCORD_API = 'https://discord.com/api';
+
+if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) {
+    throw new Error('Missing required environment variables. Please check your .env file.');
+}
 
 // Zod Schemas
 const LocationSchema = z.object({
