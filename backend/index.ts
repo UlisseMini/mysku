@@ -39,6 +39,14 @@ function isCacheValid<T>(entry?: CacheEntry<T>): boolean {
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Add static file serving before other routes
+app.use(express.static(path.join(__dirname, 'static')));
+
+// Add redirect for /privacy-policy to /privacy-policy.html
+app.get('/privacy-policy', (req: Request, res: ExpressResponse) => {
+    res.redirect('/privacy-policy.html');
+});
+
 // Discord OAuth configuration
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
@@ -528,10 +536,6 @@ app.get('/guilds', verifyToken, async (req: Request, res: ExpressResponse): Prom
             res.status(500).json({ error: 'Failed to fetch guilds' });
         }
     }
-});
-
-app.get('/', (req: Request, res: ExpressResponse): void => {
-    res.json({ message: 'Hello World!' });
 });
 
 app.listen(port, () => {
