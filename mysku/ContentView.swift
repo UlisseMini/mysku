@@ -53,7 +53,7 @@ struct LoginButton: View {
                     .fontWeight(.semibold)
             }
             .padding()
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: min(UIScreen.main.bounds.width - 80, 360))
             .background(Color.indigo)
             .foregroundColor(.white)
             .cornerRadius(10)
