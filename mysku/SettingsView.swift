@@ -323,46 +323,6 @@ private struct SettingsListContent: View {
                 }
             }
             
-            // Privacy Settings Section
-            Section {
-                let privacyRadiusOptions = [
-                    0: "No privacy radius",
-                    1000: "1 km",
-                    2000: "2 km",
-                    5000: "5 km",
-                    10000: "10 km",
-                    25000: "25 km",
-                    100000: "100 km"
-                ]
-                
-                Picker("Privacy Radius", selection: Binding(
-                    get: { privacyRadius },
-                    set: { newRadius in
-                        privacyRadius = newRadius
-                        UserDefaults.standard.set(newRadius, forKey: "privacyRadius")
-                        Task {
-                            do {
-                                try await LocationManager.shared.requestLocationUpdate()
-                                await apiManager.loadInitialData()
-                            } catch {
-                                print("Failed to update location: \(error)")
-                            }
-                        }
-                    }
-                )) {
-                    ForEach(Array(privacyRadiusOptions.keys.sorted()), id: \.self) { radius in
-                        Text(privacyRadiusOptions[radius] ?? "\(Int(radius))m")
-                            .tag(Double(radius))
-                    }
-                }
-            } header: {
-                Text("PRIVACY SETTINGS")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.gray)
-                    .textCase(nil)
-            }
-            
             // Refresh Settings Section
             Section {
                 Picker("Refresh Interval", selection: Binding(

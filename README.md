@@ -6,14 +6,11 @@ An app for privacy-preserving location sharing with lots of friends, alumni grou
 ### things needed for app store
 
 for beta review:
-- good demo mode
-- production/deployed backend
-- privacy policy?
+- rest of app store ready for submission stuff (but like, not high stakes)
+- fix miniworld.app infinite redirects
 
-
-for app store:
-- description etc. fields
-- app images for storefront
+this thing:
+- round to lat/lon (or really world-grid): way better privacy than random vector
 
 
 ### notes to not forget
@@ -24,4 +21,3 @@ let's get this working at some point so we can get list of friends and share tha
 relationships.read
 allows your app to know a user's friends and implicit relationships - requires Discord approval
 ```
-
