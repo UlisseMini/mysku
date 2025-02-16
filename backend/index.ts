@@ -550,6 +550,32 @@ app.get('/guilds', verifyToken, async (req: Request, res: ExpressResponse): Prom
     }
 });
 
+// Delete user data endpoint
+app.delete('/delete-data', verifyToken, async (req: Request, res: ExpressResponse): Promise<void> => {
+    const user = req.user!;
+
+    try {
+        // Remove user data
+        delete users[user.id];
+
+        // Remove from token cache
+        Object.keys(tokenToUserId).forEach(token => {
+            if (tokenToUserId[token] === user.id) {
+                delete tokenToUserId[token];
+            }
+        });
+
+        // Remove from guilds cache
+        delete cache.guilds[user.id];
+
+        console.log('Successfully deleted user data for:', user.id);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Failed to delete user data:', error);
+        res.status(500).json({ error: 'Failed to delete user data' });
+    }
+});
+
 // Start the server
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);

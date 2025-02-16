@@ -263,6 +263,7 @@ private struct SettingsListContent: View {
     @Binding var privacyRadius: Double
     let refreshIntervals: [TimeInterval: String]
     let saveUserSettings: () -> Void
+    @State private var showingDeleteConfirmation = false
     
     var body: some View {
         List {
@@ -342,7 +343,7 @@ private struct SettingsListContent: View {
                     .textCase(nil)
             }
             
-            // Logout Section
+            // Logout and Delete Section
             Section {
                 Button(action: {
                     authManager.logout()
@@ -352,6 +353,18 @@ private struct SettingsListContent: View {
                             .foregroundColor(.red)
                         Spacer()
                         Image(systemName: "arrow.right.circle.fill")
+                            .foregroundColor(.red)
+                    }
+                }
+                
+                Button(action: {
+                    showingDeleteConfirmation = true
+                }) {
+                    HStack {
+                        Text("Delete My Data")
+                            .foregroundColor(.red)
+                        Spacer()
+                        Image(systemName: "trash.fill")
                             .foregroundColor(.red)
                     }
                 }
@@ -388,5 +401,26 @@ private struct SettingsListContent: View {
                     .shadow(radius: 2)
             }
         })
+        .alert("Delete Account Data", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteUserDataAndLogout()
+            }
+        } message: {
+            Text("This will permanently delete all your data including location history and preferences. This action cannot be undone.")
+        }
+    }
+    
+    private func deleteUserDataAndLogout() {
+        Task {
+            do {
+                try await apiManager.deleteUserData()
+                await MainActor.run {
+                    authManager.logout()
+                }
+            } catch {
+                print("Error deleting user data:", error)
+            }
+        }
     }
 } 

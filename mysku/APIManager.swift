@@ -161,12 +161,13 @@ class APIManager: ObservableObject {
                 isLoading = true
                 error = nil
                 
-                // Load everything in parallel
-                async let userTask = fetchCurrentUser()
-                async let guildsTask = fetchGuilds()
-                async let usersTask = fetchUsers()
-                
-                try await (_, _, _) = (userTask, guildsTask, usersTask)
+                // Execute all tasks concurrently
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    group.addTask { try await self.fetchCurrentUser() }
+                    group.addTask { try await self.fetchGuilds() }
+                    group.addTask { try await self.fetchUsers() }
+                    try await group.waitForAll()
+                }
                 
                 // Start refresh timer if not already running
                 if refreshTimer == nil {
@@ -212,8 +213,8 @@ class APIManager: ObservableObject {
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
             
             if httpResponse.statusCode == 401 {
-                Task {
-                    await AuthManager.shared.handleInvalidToken()
+                Task { @MainActor in
+                    AuthManager.shared.handleInvalidToken()
                 }
             }
             
@@ -295,5 +296,14 @@ class APIManager: ObservableObject {
         users = []
         isLoading = false
         error = nil
+    }
+    
+    // Add delete user data method
+    func deleteUserData() async throws {
+        let _: [String: Bool] = try await makeRequest(
+            endpoint: "delete-data",
+            method: "DELETE"
+        )
+        reset() // Clear local data after successful deletion
     }
 } 
