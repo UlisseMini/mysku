@@ -20,7 +20,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Your location is shared with your friends on the map with reduced accuracy for privacy.</string>
+	<string>Share your approximate location with friends from your Discord servers</string>
 	<key>NSLocationDefaultAccuracyReduced</key>
 	<true/>
 </dict>
