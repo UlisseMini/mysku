@@ -1,0 +1,77 @@
+import SwiftUI
+
+struct LocationPermissionView: View {
+    @StateObject private var locationManager = LocationManager.shared
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "location.circle.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(.tint)
+            
+            Text("Location Access")
+                .font(.title)
+                .bold()
+            
+            Text("\(Constants.appName.capitalized) uses your location to show you on the map with your selected Discord communities while the app is open.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            
+            Button(action: {
+                locationManager.requestWhenInUseAuthorization()
+            }) {
+                Text("Continue")
+                    .fontWeight(.semibold)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top)
+        }
+        .onChange(of: locationManager.authorizationStatus) { status in
+            if status != .notDetermined {
+                dismiss()
+            }
+        }
+    }
+}
+
+struct LocationDeniedView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "location.slash.circle.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(.red)
+            
+            Text("Location Access Required")
+                .font(.title)
+                .bold()
+            
+            Text("\(Constants.appName.capitalized) needs location access to function properly. Please enable location access in Settings.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            
+            Button(action: {
+                if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(settingsUrl)
+                }
+            }) {
+                Text("Open Settings")
+                    .fontWeight(.semibold)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top)
+        }
+    }
+} 
