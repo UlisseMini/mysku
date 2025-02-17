@@ -91,17 +91,21 @@ struct LoginButton: View {
 }
 
 struct MainTabView: View {
+    @State private var selectedTab = 0
+    
     var body: some View {
-        TabView {
-            MapView()
+        TabView(selection: $selectedTab) {
+            MapView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Map", systemImage: "map.fill")
                 }
+                .tag(0)
             
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
+                .tag(1)
         }
     }
 }
@@ -192,14 +196,59 @@ struct MapView: View {
     ))
     @State private var selectedUser: User?
     @State private var showingLocationPermissionSheet = false
+    @Binding var selectedTab: Int
     
     var usersWithLocation: [User] {
         apiManager.users.filter { $0.location != nil }
     }
     
     var body: some View {
+        MapContent(
+            position: $position,
+            selectedUser: $selectedUser,
+            users: usersWithLocation
+        )
+        .overlay(alignment: .top) {
+            MapOverlay(
+                apiManager: apiManager,
+                locationManager: locationManager,
+                showingLocationPermissionSheet: $showingLocationPermissionSheet,
+                selectedTab: $selectedTab
+            )
+        }
+        .sheet(isPresented: $showingLocationPermissionSheet) {
+            LocationPermissionView()
+                .presentationDetents([.medium])
+        }
+        .task {
+            if apiManager.currentUser == nil {
+                await apiManager.loadInitialData()
+            }
+        }
+        .refreshable {
+            await apiManager.loadInitialData()
+        }
+        .onChange(of: locationManager.lastLocation) { newLocation in
+            if let location = newLocation, !hasInitiallyCentered {
+                position = .region(MKCoordinateRegion(
+                    center: location.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8)
+                ))
+                hasInitiallyCentered = true
+            }
+        }
+    }
+}
+
+// Move the Map content to a separate view
+private struct MapContent: View {
+    @Binding var position: MapCameraPosition
+    @Binding var selectedUser: User?
+    let users: [User]
+    
+    var body: some View {
         Map(position: $position) {
-            ForEach(usersWithLocation, id: \.id) { user in
+            ForEach(users, id: \.id) { user in
                 if let location = user.location {
                     let coordinate = CLLocationCoordinate2D(
                         latitude: location.latitude,
@@ -279,77 +328,83 @@ struct MapView: View {
         .onTapGesture {
             selectedUser = nil
         }
-        .overlay(alignment: .top) {
-            VStack(spacing: 8) {
-                if apiManager.isLoading {
-                    ProgressView()
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
-                        .shadow(radius: 2)
-                }
-                
-                if locationManager.authorizationStatus == .notDetermined {
-                    Button(action: { showingLocationPermissionSheet = true }) {
-                        HStack {
-                            Image(systemName: "location.circle.fill")
-                            Text("Enable location sharing")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                        }
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .cornerRadius(10)
-                        .shadow(radius: 2)
-                    }
+    }
+}
+
+// Move the overlay content to a separate view
+private struct MapOverlay: View {
+    @ObservedObject var apiManager: APIManager
+    @ObservedObject var locationManager: LocationManager
+    @Binding var showingLocationPermissionSheet: Bool
+    @Binding var selectedTab: Int
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            if apiManager.isLoading {
+                ProgressView()
                     .padding()
-                } else if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
+                    .background(Color(.systemBackground))
+                    .cornerRadius(8)
+                    .shadow(radius: 2)
+            }
+            
+            if locationManager.authorizationStatus == .notDetermined {
+                Button(action: { showingLocationPermissionSheet = true }) {
                     HStack {
-                        Image(systemName: "location.slash.circle.fill")
-                        Text("Location sharing disabled")
+                        Image(systemName: "location.circle.fill")
+                        Text("Enable location sharing")
                         Spacer()
-                        Button("Enable") {
-                            if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                                UIApplication.shared.open(settingsUrl)
-                            }
-                        }
+                        Image(systemName: "chevron.right")
                     }
                     .padding()
                     .background(Color(.systemBackground))
                     .cornerRadius(10)
                     .shadow(radius: 2)
+                }
+                .padding(.horizontal)
+            } else if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
+                HStack {
+                    Image(systemName: "location.slash.circle.fill")
+                    Text("Location sharing disabled")
+                    Spacer()
+                    Button("Enable") {
+                        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(settingsUrl)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+                .shadow(radius: 2)
+                .padding(.horizontal)
+            }
+            
+            if apiManager.currentUser?.privacy.enabledGuilds.isEmpty == true {
+                Button(action: { selectedTab = 1 }) {
+                    HStack {
+                        Image(systemName: "server.rack")
+                            .foregroundColor(.white)
+                        Text("No Discord servers enabled")
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("Settings")
+                            .foregroundColor(Color(.systemGray3))
+                    }
+                }
+                .padding()
+                .background(Color.black.opacity(0.75))
+                .cornerRadius(10)
+                .shadow(radius: 2)
+                .padding(.horizontal)
+            }
+            
+            if let error = apiManager.error {
+                Text(error.localizedDescription)
+                    .foregroundColor(.white)
                     .padding()
-                }
-                
-                if let error = apiManager.error {
-                    Text(error.localizedDescription)
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.red.opacity(0.8))
-                        .cornerRadius(8)
-                }
-            }
-        }
-        .sheet(isPresented: $showingLocationPermissionSheet) {
-            LocationPermissionView()
-                .presentationDetents([.medium])
-        }
-        .task {
-            // Load initial data if needed
-            if apiManager.currentUser == nil {
-                await apiManager.loadInitialData()
-            }
-        }
-        .refreshable {
-            await apiManager.loadInitialData()
-        }
-        .onChange(of: locationManager.lastLocation) { newLocation in
-            if let location = newLocation, !hasInitiallyCentered {
-                position = .region(MKCoordinateRegion(
-                    center: location.coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8)
-                ))
-                hasInitiallyCentered = true
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(8)
             }
         }
     }
