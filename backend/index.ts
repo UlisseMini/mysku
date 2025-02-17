@@ -304,7 +304,7 @@ app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
 
     // Filter users based on guild membership and privacy settings
-    const visibleUsers = Object.values(users).filter(otherUser => {
+    const visibleUsers: User[] = Object.values(users).filter(otherUser => {
         // Always include the current user
         if (otherUser.id === user.id) return true;
 
@@ -326,7 +326,7 @@ app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
         return otherUser;
     });
 
-    res.json(visibleUsers);
+    res.json(jiggleUsers(visibleUsers));
 });
 
 // Update user data (location, privacy settings, etc)
@@ -632,4 +632,50 @@ function saveDataToDisk() {
     } catch (error) {
         console.error('Error saving data to disk:', error);
     }
+}
+
+
+
+// Incredibly cursed bullshit
+// Basically: When we round to a grid people end up in the exact same spot,
+// so we spread them out a bit. This doesn't compromise privacy at all since we
+// round before this. a statistical attack just finds the grid-cell-center.
+//
+// This solves the problem when map is zoomed in, when zoomed out we 
+function jiggleUsers(users: User[]): User[] {
+    // Group users with a location by a 4km grid.
+    const clusters: Record<string, User[]> = {};
+    for (const user of users) {
+        if (!user.location) continue;
+        const { latitude, longitude } = user.location;
+        const key = `${Math.round(latitude / 0.04) * 0.04}-${Math.round(longitude / 0.04) * 0.04}`;
+        clusters[key] = clusters[key] || [];
+        clusters[key].push(user);
+    }
+
+    // For each cluster, spread users evenly on a circle.
+    const jiggledMap = new Map<string, User>();
+    for (const key in clusters) {
+        const cluster = clusters[key];
+        const n = cluster.length;
+        cluster.forEach((user, i) => {
+            const { latitude, longitude, accuracy, lastUpdated } = user.location!;
+            const angle = (2 * Math.PI * i) / n;
+            // Use half the accuracy as the offset (in meters).
+            const offset = accuracy / 2;
+            // Convert meters to degrees. 1° latitude is roughly 111320m.
+            const dLat = (offset * Math.cos(angle)) / 111320;
+            const dLon = (offset * Math.sin(angle)) / (111320 * Math.cos(latitude * Math.PI / 180));
+            const newLoc = {
+                latitude: latitude + dLat,
+                longitude: longitude + dLon,
+                accuracy,
+                lastUpdated,
+            };
+            jiggledMap.set(user.id, { ...user, location: newLoc });
+        });
+    }
+
+    // Return a new list preserving original order.
+    return users.map(user => user.location && jiggledMap.has(user.id) ? jiggledMap.get(user.id)! : user);
 }
