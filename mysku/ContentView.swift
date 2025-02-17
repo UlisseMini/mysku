@@ -120,7 +120,7 @@ struct LocationPermissionView: View {
                 .font(.title)
                 .bold()
             
-            Text("\(Constants.appName.capitalized) needs your location to share it with your selected Discord communities while the app is open.")
+            Text("\(Constants.appName.capitalized) uses your location to show you on the map with your selected Discord communities while the app is open.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
@@ -128,7 +128,7 @@ struct LocationPermissionView: View {
             Button(action: {
                 locationManager.requestWhenInUseAuthorization()
             }) {
-                Text("Enable Location Access")
+                Text("Continue")
                     .fontWeight(.semibold)
                     .padding()
                     .frame(maxWidth: .infinity)
