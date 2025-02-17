@@ -14,6 +14,10 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Add these constants near the top of the file after other imports
+const DB_DIR = fs.existsSync("/db") ? "/db" : path.join(__dirname, 'db');
+const USERS_FILE = path.join(DB_DIR, 'users.json');
+const TOKENS_FILE = path.join(DB_DIR, 'tokenToUserId.json');
 
 // Cache interfaces and implementations
 interface CacheEntry<T> {
@@ -150,9 +154,18 @@ app.use((req: Request, res: ExpressResponse, next: NextFunction) => {
 
 app.use(express.json());
 
-// In-memory store for demo
+// Replace the existing users and tokenToUserId declarations with:
 const users: Record<string, User> = {};
-const tokenToUserId: Record<string, string> = {}; // Cache mapping tokens to user IDs
+const tokenToUserId: Record<string, string> = {};
+
+// Load any existing data
+loadPersistedData();
+
+// Set up periodic saving
+if (fs.existsSync(DB_DIR)) {
+    setInterval(saveDataToDisk, 60000); // Save every minute
+    console.log('Automatic data persistence enabled');
+}
 
 // Fetch demo data, validate it, merge demo users into the users store
 const rawDemoData = JSON.parse(fs.readFileSync(path.join(__dirname, 'demo-mode.json'), 'utf-8'));
@@ -583,3 +596,40 @@ app.listen(port, () => {
 
 // Add explicit export to mark as ESM module
 export default app;
+
+function loadPersistedData() {
+    if (!fs.existsSync(DB_DIR)) {
+        console.log('No db directory found, skipping data load');
+        return;
+    }
+
+    try {
+        if (fs.existsSync(USERS_FILE)) {
+            const userData = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+            Object.assign(users, userData);
+            console.log(`Loaded ${Object.keys(userData).length} users from disk`);
+        }
+
+        if (fs.existsSync(TOKENS_FILE)) {
+            const tokenData = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf-8'));
+            Object.assign(tokenToUserId, tokenData);
+            console.log(`Loaded ${Object.keys(tokenData).length} tokens from disk`);
+        }
+    } catch (error) {
+        console.error('Error loading persisted data:', error);
+    }
+}
+
+function saveDataToDisk() {
+    if (!fs.existsSync(DB_DIR)) {
+        return; // Don't save if db directory doesn't exist
+    }
+
+    try {
+        fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+        fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokenToUserId, null, 2));
+        console.log('Data persisted to disk');
+    } catch (error) {
+        console.error('Error saving data to disk:', error);
+    }
+}
