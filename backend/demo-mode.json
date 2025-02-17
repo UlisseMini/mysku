@@ -53,7 +53,7 @@
                 "location": {
                     "latitude": 37.7879,
                     "longitude": -122.4075,
-                    "accuracy": 10,
+                    "accuracy": 1200,
                     "lastUpdated": 1710892800000
                 }
             },
@@ -71,9 +71,9 @@
                     "blockedUsers": []
                 },
                 "location": {
-                    "latitude": 37.3346,
-                    "longitude": -122.0090,
-                    "accuracy": 10,
+                    "latitude": 37.7879,
+                    "longitude": -122.4075,
+                    "accuracy": 1000,
                     "lastUpdated": 1710892800000
                 }
             }
