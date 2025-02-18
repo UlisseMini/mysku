@@ -205,7 +205,8 @@ struct SettingsView: View {
     ]
     
     var body: some View {
-        NavigationView {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // Direct content for iPad
             SettingsListContent(
                 authManager: authManager,
                 apiManager: apiManager,
@@ -221,6 +222,25 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemBackground))
+        } else {
+            // Navigation view for iPhone
+            NavigationView {
+                SettingsListContent(
+                    authManager: authManager,
+                    apiManager: apiManager,
+                    selectedGuilds: $selectedGuilds,
+                    blockedUsers: $blockedUsers,
+                    isSaving: $isSaving,
+                    guildSearchText: $guildSearchText,
+                    userSearchText: $userSearchText,
+                    privacyRadius: $privacyRadius,
+                    refreshIntervals: refreshIntervals,
+                    saveUserSettings: saveUserSettings
+                )
+                .navigationTitle("Settings")
+                .scrollContentBackground(.hidden)
+                .background(Color(uiColor: .systemBackground))
+            }
         }
     }
     
