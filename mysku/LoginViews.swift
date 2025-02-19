@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct LoginView: View {
     @StateObject private var authManager = AuthManager.shared
@@ -19,6 +20,12 @@ struct LoginView: View {
             
             LoginButton {
                 authManager.login()
+            }
+        }
+        .onAppear {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first {
+                window.rootViewController?.view.window?.rootViewController = window.rootViewController
             }
         }
     }

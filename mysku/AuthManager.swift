@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import UIKit
+import AuthenticationServices
 
 @MainActor
 class AuthManager: ObservableObject {
@@ -30,6 +31,8 @@ class AuthManager: ObservableObject {
     var token: String? {
         UserDefaults.standard.string(forKey: tokenKey)
     }
+
+    private var authSession: ASWebAuthenticationSession?
 
     init() {
         let hasToken = UserDefaults.standard.string(forKey: tokenKey) != nil
@@ -83,10 +86,29 @@ class AuthManager: ObservableObject {
             return
         }
         
-        print("AuthManager: Opening auth URL")
-        DispatchQueue.main.async {
-            UIApplication.shared.open(authURL)
+        print("AuthManager: Creating auth session")
+        authSession = ASWebAuthenticationSession(url: authURL, callbackURLScheme: "mysku") { [weak self] callbackURL, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("AuthManager: Auth session failed: \(error)")
+                self.resetState()
+                return
+            }
+            
+            guard let callbackURL = callbackURL else {
+                print("AuthManager: No callback URL received")
+                self.resetState()
+                return
+            }
+            
+            self.handleCallback(url: callbackURL)
         }
+        
+        authSession?.presentationContextProvider = UIApplication.shared.keyWindow?.rootViewController as? ASWebAuthenticationPresentationContextProviding
+        
+        print("AuthManager: Starting auth session")
+        authSession?.start()
     }
 
     private func exchangeCodeForToken() {
@@ -227,5 +249,11 @@ extension Data {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+extension UIViewController: ASWebAuthenticationPresentationContextProviding {
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        return view.window!
     }
 }
