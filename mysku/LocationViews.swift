@@ -74,4 +74,28 @@ struct LocationDeniedView: View {
             .padding(.top)
         }
     }
+}
+
+// Add a new view for the refresh button
+struct LocationRefreshButton: View {
+    @StateObject private var locationManager = LocationManager.shared
+    @State private var isRefreshing = false
+    
+    var body: some View {
+        Button {
+            Task {
+                isRefreshing = true
+                do {
+                    try await locationManager.requestLocationUpdate()
+                } catch {
+                    print("Failed to update location: \(error)")
+                }
+                isRefreshing = false
+            }
+        } label: {
+            Image(systemName: "location.circle")
+                .font(.system(size: 22))
+                .symbolEffect(.bounce, value: isRefreshing)
+        }
+    }
 } 

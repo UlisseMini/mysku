@@ -7,8 +7,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private let apiManager = APIManager.shared
     
-    private let updateInterval: TimeInterval = 30 // Update every 30 seconds
-    private let minimumMovementThreshold = 100.0 // Minimum movement in meters to trigger an update
+    // Comment out or remove the auto-refresh related properties
+    // private let updateInterval: TimeInterval = 30 // Update every 30 seconds
+    // private let minimumMovementThreshold = 100.0 // Minimum movement in meters to trigger an update
     
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus
@@ -130,6 +131,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             return
         }
         
+        // Comment out the auto-refresh logic
+        /*
         guard let location = locations.last else {
             return
         }
@@ -147,6 +150,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         Task {
             try? await requestLocationUpdate()
         }
+        */
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

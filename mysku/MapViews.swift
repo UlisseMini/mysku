@@ -2,6 +2,75 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
+private struct LocationUpdateHeader: View {
+    @ObservedObject var locationManager: LocationManager
+    @State private var isRefreshing = false
+    @State private var showSuccess = false
+    
+    var shouldShowUpdate: Bool {
+        guard locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways else {
+            return false // no location access yet
+        }
+
+        guard let lastLocation = locationManager.lastLocation else {
+            return true
+        }
+        // Show if last update was more than 8 hours ago
+        // return Date().timeIntervalSince(lastLocation.timestamp) > 8 * 60 * 60
+        return true; // prob better for app store retards
+    }
+    
+    var body: some View {
+        if shouldShowUpdate {
+            Button {
+                Task {
+                    isRefreshing = true
+                    do {
+                        try await locationManager.requestLocationUpdate()
+                        withAnimation {
+                            showSuccess = true
+                        }
+                        // Reset success state after delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            withAnimation {
+                                showSuccess = false
+                            }
+                        }
+                    } catch {
+                        print("Failed to update location: \(error)")
+                    }
+                    isRefreshing = false
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "location.circle.fill")
+                        .foregroundColor(.blue)
+                    Text("Update Location")
+                        .foregroundColor(.blue)
+                    Spacer()
+                    if isRefreshing {
+                        ProgressView()
+                    } else if showSuccess {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .transition(.scale.combined(with: .opacity))
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+                .shadow(radius: 2)
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .disabled(isRefreshing)
+        }
+    }
+}
+
 struct MapView: View {
     @StateObject private var apiManager = APIManager.shared
     @StateObject private var locationManager = LocationManager.shared
@@ -25,24 +94,28 @@ struct MapView: View {
             users: usersWithLocation
         )
         .overlay(alignment: .top) {
-            MapOverlay(
-                apiManager: apiManager,
-                locationManager: locationManager,
-                showingLocationPermissionSheet: $showingLocationPermissionSheet,
-                selectedTab: $selectedTab
-            )
+            VStack(spacing: 8) {
+                LocationUpdateHeader(locationManager: locationManager)
+                
+                MapOverlay(
+                    apiManager: apiManager,
+                    locationManager: locationManager,
+                    showingLocationPermissionSheet: $showingLocationPermissionSheet,
+                    selectedTab: $selectedTab
+                )
+            }
         }
         .sheet(isPresented: $showingLocationPermissionSheet) {
             LocationPermissionView()
                 .presentationDetents([.medium])
         }
+        // .refreshable {
+        //     await apiManager.loadInitialData()
+        // }
         .task {
             if apiManager.currentUser == nil {
                 await apiManager.loadInitialData()
             }
-        }
-        .refreshable {
-            await apiManager.loadInitialData()
         }
         .onChange(of: locationManager.lastLocation) { newLocation in
             if let location = newLocation, !hasInitiallyCentered {

@@ -197,12 +197,12 @@ struct SettingsView: View {
     @State private var privacyRadius: Double = UserDefaults.standard.double(forKey: "privacyRadius")
     
     // Refresh interval options in seconds
-    private let refreshIntervals = [
-        15.0: "15 seconds",
-        30.0: "30 seconds",
-        60.0: "1 minute",
-        300.0: "5 minutes"
-    ]
+    // private let refreshIntervals = [
+    //     15.0: "15 seconds",
+    //     30.0: "30 seconds",
+    //     60.0: "1 minute",
+    //     300.0: "5 minutes"
+    // ]
     
     var body: some View {
         if UIDevice.current.userInterfaceIdiom == .pad {
@@ -216,7 +216,7 @@ struct SettingsView: View {
                 guildSearchText: $guildSearchText,
                 userSearchText: $userSearchText,
                 privacyRadius: $privacyRadius,
-                refreshIntervals: refreshIntervals,
+                // refreshIntervals: refreshIntervals,
                 saveUserSettings: saveUserSettings
             )
             .navigationTitle("Settings")
@@ -234,7 +234,7 @@ struct SettingsView: View {
                     guildSearchText: $guildSearchText,
                     userSearchText: $userSearchText,
                     privacyRadius: $privacyRadius,
-                    refreshIntervals: refreshIntervals,
+                    // refreshIntervals: refreshIntervals,
                     saveUserSettings: saveUserSettings
                 )
                 .navigationTitle("Settings")
@@ -281,7 +281,7 @@ private struct SettingsListContent: View {
     @Binding var guildSearchText: String
     @Binding var userSearchText: String
     @Binding var privacyRadius: Double
-    let refreshIntervals: [TimeInterval: String]
+    // let refreshIntervals: [TimeInterval: String]
     let saveUserSettings: () -> Void
     @State private var showingDeleteConfirmation = false
     
@@ -345,23 +345,23 @@ private struct SettingsListContent: View {
             }
             
             // Refresh Settings Section
-            Section {
-                Picker("Refresh Interval", selection: Binding(
-                    get: { apiManager.refreshInterval },
-                    set: { apiManager.updateRefreshInterval($0) }
-                )) {
-                    ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
-                        Text(refreshIntervals[interval] ?? "\(Int(interval))s")
-                            .tag(interval)
-                    }
-                }
-            } header: {
-                Text("REFRESH SETTINGS")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.gray)
-                    .textCase(nil)
-            }
+            // Section {
+            //     Picker("Refresh Interval", selection: Binding(
+            //         get: { apiManager.refreshInterval },
+            //         set: { apiManager.updateRefreshInterval($0) }
+            //     )) {
+            //         ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
+            //             Text(refreshIntervals[interval] ?? "\(Int(interval))s")
+            //                 .tag(interval)
+            //         }
+            //     }
+            // } header: {
+            //     Text("REFRESH SETTINGS")
+            //         .font(.subheadline)
+            //         .fontWeight(.semibold)
+            //         .foregroundColor(.gray)
+            //         .textCase(nil)
+            // }
             
             // Logout and Delete Section
             Section {
@@ -400,9 +400,9 @@ private struct SettingsListContent: View {
                 blockedUsers = user.privacy.blockedUsers
             }
         }
-        .refreshable {
-            await apiManager.loadInitialData()
-        }
+        // .refreshable {
+        //     await apiManager.loadInitialData()
+        // }
         .overlay(alignment: .top) {
             if apiManager.isLoading {
                 ProgressView()
