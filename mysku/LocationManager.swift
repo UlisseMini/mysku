@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import UIKit
 
 @MainActor
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -7,24 +8,42 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private let apiManager = APIManager.shared
     
-    // Comment out or remove the auto-refresh related properties
-    // private let updateInterval: TimeInterval = 30 // Update every 30 seconds
-    // private let minimumMovementThreshold = 100.0 // Minimum movement in meters to trigger an update
+    // Restore and improve the auto-refresh related properties
+    @Published var updateInterval: TimeInterval = UserDefaults.standard.double(forKey: "locationUpdateInterval") {
+        didSet {
+            UserDefaults.standard.set(updateInterval, forKey: "locationUpdateInterval")
+            configureBackgroundUpdates()
+        }
+    }
+    private let minimumMovementThreshold = 100.0 // Minimum movement in meters to trigger an update
     
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus
     @Published var showingBackgroundPrompt = false
+    @Published var backgroundUpdatesEnabled: Bool = UserDefaults.standard.bool(forKey: "backgroundUpdatesEnabled") {
+        didSet {
+            UserDefaults.standard.set(backgroundUpdatesEnabled, forKey: "backgroundUpdatesEnabled")
+            configureBackgroundUpdates()
+        }
+    }
     
     private var lastReportedLocation: CLLocation?
     
     override init() {
+        // Set default update interval if not already set
+        if UserDefaults.standard.double(forKey: "locationUpdateInterval") == 0 {
+            UserDefaults.standard.set(60.0, forKey: "locationUpdateInterval") // Default to 1 minute
+        }
+        
         authorizationStatus = locationManager.authorizationStatus
         super.init()
         print("📍 LocationManager: Initializing...")
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyReduced
-        locationManager.allowsBackgroundLocationUpdates = false
         locationManager.pausesLocationUpdatesAutomatically = true
+        
+        // Configure background updates based on stored settings
+        configureBackgroundUpdates()
         
         // Print initial state
         print("📍 LocationManager: Initial authorization status: \(locationManager.authorizationStatus.debugDescription)")
@@ -35,8 +54,42 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         
         // If we already have permission, start updates
-        if locationManager.authorizationStatus == .authorizedWhenInUse {
+        if locationManager.authorizationStatus == .authorizedWhenInUse || 
+           locationManager.authorizationStatus == .authorizedAlways {
             startUpdatingLocation()
+        }
+    }
+    
+    private func configureBackgroundUpdates() {
+        // Only enable background updates if we have permission and it's enabled in settings
+        let canUseBackground = locationManager.authorizationStatus == .authorizedAlways && backgroundUpdatesEnabled
+        
+        locationManager.allowsBackgroundLocationUpdates = canUseBackground
+        
+        // Fix for default update interval - ensure we have a valid interval
+        if updateInterval <= 0 {
+            updateInterval = 60.0 // Set to default 1 minute if invalid
+            print("📍 LocationManager: Fixed invalid update interval to 60s")
+        }
+        
+        // Configure the update distance filter based on the update interval
+        // More frequent updates = smaller distance filter
+        if canUseBackground {
+            // Set distance filter based on update interval
+            // Shorter intervals = smaller distance filter
+            if updateInterval <= 30 {
+                locationManager.distanceFilter = 50 // Update if moved 50m
+            } else if updateInterval <= 60 {
+                locationManager.distanceFilter = 100 // Update if moved 100m
+            } else {
+                locationManager.distanceFilter = 200 // Update if moved 200m
+            }
+            
+            print("📍 LocationManager: Background updates enabled with interval \(updateInterval)s and distance filter \(locationManager.distanceFilter)m")
+        } else {
+            // When not in background mode, use a standard distance filter
+            locationManager.distanceFilter = kCLDistanceFilterNone
+            print("📍 LocationManager: Background updates disabled")
         }
     }
     
@@ -70,6 +123,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             return
         }
         
+        // Configure background updates based on current settings
+        configureBackgroundUpdates()
+        
         // First ensure initial data is loaded
         Task {
             if apiManager.currentUser == nil {
@@ -77,7 +133,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 await apiManager.loadInitialData()
             }
             
-            // Now start location updates
+            // Start location updates
+            locationManager.startUpdatingLocation()
+            
+            // Now request an immediate location update
             do {
                 try await requestLocationUpdate()
             } catch {
@@ -89,7 +148,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     // Single async method for requesting location updates
     func requestLocationUpdate() async throws {
         // Early return if we don't have permission
-        guard locationManager.authorizationStatus == .authorizedWhenInUse else {
+        guard locationManager.authorizationStatus == .authorizedWhenInUse || 
+              locationManager.authorizationStatus == .authorizedAlways else {
             print("📍 LocationManager: Cannot request location update - not authorized")
             throw LocationError.notAuthorized
         }
@@ -100,8 +160,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             throw LocationError.updateFailed
         }
         
-        print("📍 LocationManager: Location update - Lat: \(location.coordinate.latitude), Lon: \(location.coordinate.longitude)")
-        print("📍 LocationManager: Accuracy: \(Int(location.horizontalAccuracy))m")
+        // Determine if this is a background update
+        let isBackgroundUpdate = UIApplication.shared.applicationState == .background
+        
+        print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Location update - Lat: \(location.coordinate.latitude), Lon: \(location.coordinate.longitude)")
+        print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Accuracy: \(Int(location.horizontalAccuracy))m")
         
         // Update our stored values
         lastLocation = location
@@ -133,32 +196,48 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - CLLocationManagerDelegate
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        // Early return if we lost permission while updating
-        guard locationManager.authorizationStatus == .authorizedWhenInUse else {
+        // Early return if we lost permission
+        guard locationManager.authorizationStatus == .authorizedWhenInUse || 
+              locationManager.authorizationStatus == .authorizedAlways else {
             stopUpdatingLocation()
             return
         }
         
-        // Comment out the auto-refresh logic
-        /*
         guard let location = locations.last else {
             return
         }
         
-        // Only update if we've moved significantly
+        // Determine if this is a background update
+        let isBackgroundUpdate = UIApplication.shared.applicationState == .background
+        
+        // Only update if we've moved significantly or if it's been a while since last update
         if let lastLocation = lastReportedLocation {
             let distance = location.distance(from: lastLocation)
-            if distance < minimumMovementThreshold {
+            let timeSinceLastUpdate = Date().timeIntervalSince(lastLocation.timestamp)
+            
+            // Update if we've moved enough OR if enough time has passed
+            if distance < minimumMovementThreshold && timeSinceLastUpdate < updateInterval {
                 return
             }
-            print("📍 LocationManager: Significant movement detected: \(Int(distance))m")
+            
+            if distance >= minimumMovementThreshold {
+                print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Significant movement detected: \(Int(distance))m")
+            }
+            
+            if timeSinceLastUpdate >= updateInterval {
+                print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Update interval reached: \(Int(timeSinceLastUpdate))s")
+            }
         }
         
-        // This is just for background updates, not our manual updates
+        // Process the location update
         Task {
-            try? await requestLocationUpdate()
+            do {
+                try await requestLocationUpdate()
+                print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Location successfully updated")
+            } catch {
+                print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Location update failed: \(error)")
+            }
         }
-        */
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -195,7 +274,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         switch status {
         case .authorizedAlways:
             print("📍 LocationManager: User granted always permission")
-            locationManager.allowsBackgroundLocationUpdates = true  // Enable background updates only after permission
+            // Reconfigure background updates now that we have permission
+            configureBackgroundUpdates()
             startUpdatingLocation()
         case .authorizedWhenInUse:
             print("📍 LocationManager: User granted when-in-use permission")

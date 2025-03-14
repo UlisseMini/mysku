@@ -189,6 +189,7 @@ struct UserRow: View {
 struct SettingsView: View {
     @StateObject private var authManager = AuthManager.shared
     @StateObject private var apiManager = APIManager.shared
+    @StateObject private var locationManager = LocationManager.shared
     @State private var selectedGuilds: Set<String> = []
     @State private var blockedUsers: [String] = []
     @State private var isSaving = false
@@ -197,12 +198,12 @@ struct SettingsView: View {
     @State private var privacyRadius: Double = UserDefaults.standard.double(forKey: "privacyRadius")
     
     // Refresh interval options in seconds
-    // private let refreshIntervals = [
-    //     15.0: "15 seconds",
-    //     30.0: "30 seconds",
-    //     60.0: "1 minute",
-    //     300.0: "5 minutes"
-    // ]
+    private let refreshIntervals = [
+        60.0: "1 minute",
+        600.0: "10 minutes",
+        3600.0: "1 hour",
+        86400.0: "1 day"
+    ]
     
     var body: some View {
         if UIDevice.current.userInterfaceIdiom == .pad {
@@ -210,13 +211,14 @@ struct SettingsView: View {
             SettingsListContent(
                 authManager: authManager,
                 apiManager: apiManager,
+                locationManager: locationManager,
                 selectedGuilds: $selectedGuilds,
                 blockedUsers: $blockedUsers,
                 isSaving: $isSaving,
                 guildSearchText: $guildSearchText,
                 userSearchText: $userSearchText,
                 privacyRadius: $privacyRadius,
-                // refreshIntervals: refreshIntervals,
+                refreshIntervals: refreshIntervals,
                 saveUserSettings: saveUserSettings
             )
             .navigationTitle("Settings")
@@ -228,13 +230,14 @@ struct SettingsView: View {
                 SettingsListContent(
                     authManager: authManager,
                     apiManager: apiManager,
+                    locationManager: locationManager,
                     selectedGuilds: $selectedGuilds,
                     blockedUsers: $blockedUsers,
                     isSaving: $isSaving,
                     guildSearchText: $guildSearchText,
                     userSearchText: $userSearchText,
                     privacyRadius: $privacyRadius,
-                    // refreshIntervals: refreshIntervals,
+                    refreshIntervals: refreshIntervals,
                     saveUserSettings: saveUserSettings
                 )
                 .navigationTitle("Settings")
@@ -275,13 +278,14 @@ struct SettingsView: View {
 private struct SettingsListContent: View {
     @ObservedObject var authManager: AuthManager
     @ObservedObject var apiManager: APIManager
+    @ObservedObject var locationManager: LocationManager
     @Binding var selectedGuilds: Set<String>
     @Binding var blockedUsers: [String]
     @Binding var isSaving: Bool
     @Binding var guildSearchText: String
     @Binding var userSearchText: String
     @Binding var privacyRadius: Double
-    // let refreshIntervals: [TimeInterval: String]
+    let refreshIntervals: [TimeInterval: String]
     let saveUserSettings: () -> Void
     @State private var showingDeleteConfirmation = false
     
@@ -344,24 +348,49 @@ private struct SettingsListContent: View {
                 }
             }
             
-            // Refresh Settings Section
-            // Section {
-            //     Picker("Refresh Interval", selection: Binding(
-            //         get: { apiManager.refreshInterval },
-            //         set: { apiManager.updateRefreshInterval($0) }
-            //     )) {
-            //         ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
-            //             Text(refreshIntervals[interval] ?? "\(Int(interval))s")
-            //                 .tag(interval)
-            //         }
-            //     }
-            // } header: {
-            //     Text("REFRESH SETTINGS")
-            //         .font(.subheadline)
-            //         .fontWeight(.semibold)
-            //         .foregroundColor(.gray)
-            //         .textCase(nil)
-            // }
+            // Location Settings Section
+            Section {
+                if locationManager.authorizationStatus == .authorizedAlways {
+                    Toggle("Background Location Updates", isOn: $locationManager.backgroundUpdatesEnabled)
+                        .onChange(of: locationManager.backgroundUpdatesEnabled) { _ in
+                            // The property observer in LocationManager will handle saving
+                        }
+                    
+                    if locationManager.backgroundUpdatesEnabled {
+                        Picker("Update Interval", selection: $locationManager.updateInterval) {
+                            ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
+                                Text(refreshIntervals[interval] ?? "\(Int(interval))s")
+                                    .tag(interval)
+                            }
+                        }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Background Location Disabled")
+                            .font(.headline)
+                        
+                        Text("Enable 'Always' location permission to allow background updates.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Button("Request Background Permission") {
+                            locationManager.requestAlwaysAuthorization()
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding(.vertical, 8)
+                }
+            } header: {
+                Text("LOCATION SETTINGS")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.gray)
+                    .textCase(nil)
+            } footer: {
+                if locationManager.backgroundUpdatesEnabled {
+                    Text("Background updates allow your location to be shared even when the app is closed. This uses more battery but keeps your location current.")
+                }
+            }
             
             // Logout and Delete Section
             Section {
@@ -400,9 +429,6 @@ private struct SettingsListContent: View {
                 blockedUsers = user.privacy.blockedUsers
             }
         }
-        // .refreshable {
-        //     await apiManager.loadInitialData()
-        // }
         .overlay(alignment: .top) {
             if apiManager.isLoading {
                 ProgressView()
