@@ -20,8 +20,25 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Share your approximate location with friends from your Discord servers</string>
-	<key>NSLocationDefaultAccuracyReduced</key>
-	<true/>
+	<string>Your location is used to show you on the map with your selected Discord communities while the app is open.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Your location is used to show you on the map with your selected Discord communities. Background location helps keep your location up to date even when the app is not open.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Your location is used to show you on the map with your selected Discord communities. Background location helps keep your location up to date even when the app is not open.</string>
+
+	<!-- Non precise location is fine/acceptable -->
+	<!-- <key>NSLocationDefaultAccuracyReduced</key>
+	<true/> -->
+
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.ulirocks.mysku.locationRefresh</string>
+	</array>
+
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

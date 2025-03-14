@@ -13,6 +13,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus
+    @Published var showingBackgroundPrompt = false
     
     private var lastReportedLocation: CLLocation?
     
@@ -52,12 +53,19 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+    func requestAlwaysAuthorization() {
+        print("📍 LocationManager: Requesting always authorization...")
+        // Request authorization first, we'll enable background updates after permission is granted
+        locationManager.requestAlwaysAuthorization()
+    }
+    
     func startUpdatingLocation() {
         print("📍 LocationManager: Starting location updates...")
         print("📍 LocationManager: Authorization status: \(locationManager.authorizationStatus.debugDescription)")
         
         // Early return if we don't have permission
-        guard locationManager.authorizationStatus == .authorizedWhenInUse else {
+        guard locationManager.authorizationStatus == .authorizedWhenInUse || 
+              locationManager.authorizationStatus == .authorizedAlways else {
             print("📍 LocationManager: Cannot start location updates - not authorized")
             return
         }
@@ -185,6 +193,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         authorizationStatus = status
         
         switch status {
+        case .authorizedAlways:
+            print("📍 LocationManager: User granted always permission")
+            locationManager.allowsBackgroundLocationUpdates = true  // Enable background updates only after permission
+            startUpdatingLocation()
         case .authorizedWhenInUse:
             print("📍 LocationManager: User granted when-in-use permission")
             startUpdatingLocation()

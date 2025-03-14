@@ -6,6 +6,23 @@ struct LocationPermissionView: View {
     
     var body: some View {
         VStack(spacing: 20) {
+            if locationManager.showingBackgroundPrompt {
+                backgroundPromptContent
+            } else {
+                initialPromptContent
+            }
+        }
+        .onChange(of: locationManager.authorizationStatus) { status in
+            if status == .authorizedWhenInUse {
+                locationManager.showingBackgroundPrompt = true
+            } else if status == .authorizedAlways || status == .denied || status == .restricted {
+                dismiss()
+            }
+        }
+    }
+    
+    private var initialPromptContent: some View {
+        VStack(spacing: 20) {
             Image(systemName: "location.circle.fill")
                 .font(.system(size: 60))
                 .foregroundStyle(.tint)
@@ -33,9 +50,42 @@ struct LocationPermissionView: View {
             .padding(.horizontal, 40)
             .padding(.top)
         }
-        .onChange(of: locationManager.authorizationStatus) { status in
-            if status != .notDetermined {
+    }
+    
+    private var backgroundPromptContent: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "location.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(.tint)
+            
+            Text("Background Location")
+                .font(.title)
+                .bold()
+            
+            Text("Would you like to share your location even when the app is in the background? This helps keep your location up to date for your Discord communities.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            
+            Button(action: {
+                locationManager.requestAlwaysAuthorization()
+            }) {
+                Text("Enable Background Location")
+                    .fontWeight(.semibold)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top)
+            
+            Button(action: {
                 dismiss()
+            }) {
+                Text("Not Now")
+                    .foregroundStyle(.secondary)
             }
         }
     }

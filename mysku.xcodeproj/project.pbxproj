@@ -417,7 +417,9 @@
 				INFOPLIST_FILE = mysku/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = mysku;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Mysku needs your location to share it with your selected Discord communities while the app is open.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Keep your friends up to date on your travels without opening the app!";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Share your approximate location with friends from your Discord servers even when the app is in the background";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Share your approximate location with friends from your Discord servers";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -451,7 +453,9 @@
 				INFOPLIST_FILE = mysku/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = mysku;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Mysku needs your location to share it with your selected Discord communities while the app is open.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Keep your friends up to date on your travels without opening the app!";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Share your approximate location with friends from your Discord servers even when the app is in the background";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Share your approximate location with friends from your Discord servers";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
