@@ -68,3 +68,4 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 
 backend/.env
+AuthKey_23G2RS7AJF.p8
