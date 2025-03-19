@@ -94,24 +94,17 @@ struct MapView: View {
             users: usersWithLocation
         )
         .overlay(alignment: .top) {
-            VStack(spacing: 8) {
-                LocationUpdateHeader(locationManager: locationManager)
-                
-                MapOverlay(
-                    apiManager: apiManager,
-                    locationManager: locationManager,
-                    showingLocationPermissionSheet: $showingLocationPermissionSheet,
-                    selectedTab: $selectedTab
-                )
-            }
+            MapOverlay(
+                apiManager: apiManager,
+                locationManager: locationManager,
+                showingLocationPermissionSheet: $showingLocationPermissionSheet,
+                selectedTab: $selectedTab
+            )
         }
         .sheet(isPresented: $showingLocationPermissionSheet) {
             LocationPermissionView()
                 .presentationDetents([.medium])
         }
-        // .refreshable {
-        //     await apiManager.loadInitialData()
-        // }
         .task {
             if apiManager.currentUser == nil {
                 await apiManager.loadInitialData()
