@@ -45,6 +45,14 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         // Configure background updates based on stored settings
         configureBackgroundUpdates()
         
+        // Add notification observer for app becoming active
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        
         // Print initial state
         print("📍 LocationManager: Initial authorization status: \(locationManager.authorizationStatus.debugDescription)")
         if let location = locationManager.location {
@@ -57,6 +65,18 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         if locationManager.authorizationStatus == .authorizedWhenInUse || 
            locationManager.authorizationStatus == .authorizedAlways {
             startUpdatingLocation()
+        }
+    }
+    
+    @objc private func applicationDidBecomeActive() {
+        print("📍 LocationManager: App became active, requesting location update")
+        // Request a location update when app becomes active
+        Task {
+            do {
+                try await requestLocationUpdate()
+            } catch {
+                print("📍 LocationManager: Location update failed when app became active - \(error)")
+            }
         }
     }
     
