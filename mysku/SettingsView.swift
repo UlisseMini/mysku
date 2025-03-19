@@ -290,6 +290,23 @@ private struct SettingsListContent: View {
     let saveUserSettings: () -> Void
     @State private var showingDeleteConfirmation = false
     
+    // Distance options and their display values
+    private let distanceOptions: [(value: Double, display: String)] = [
+        (100.0, "100 meters"),
+        (1000.0, "1 kilometer"),
+        (10000.0, "10 kilometers"),
+        (100000.0, "100 kilometers")
+    ]
+    
+    private func formatDistance(_ meters: Double) -> String {
+        if meters >= 1000 {
+            let km = meters / 1000
+            return "\(Int(km))km"
+        } else {
+            return "\(Int(meters))m"
+        }
+    }
+    
     var body: some View {
         List {
             // Servers Section
@@ -364,6 +381,13 @@ private struct SettingsListContent: View {
                                     .tag(interval)
                             }
                         }
+                        
+                        Picker("Minimum Movement", selection: $locationManager.minimumMovementThreshold) {
+                            ForEach(distanceOptions, id: \.value) { option in
+                                Text(option.display).tag(option.value)
+                            }
+                        }
+                        .pickerStyle(.menu)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 8) {

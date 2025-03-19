@@ -15,7 +15,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             configureBackgroundUpdates()
         }
     }
-    private let minimumMovementThreshold = 100.0 // Minimum movement in meters to trigger an update
+    
+    @Published var minimumMovementThreshold: Double = UserDefaults.standard.double(forKey: "minimumMovementThreshold") {
+        didSet {
+            UserDefaults.standard.set(minimumMovementThreshold, forKey: "minimumMovementThreshold")
+            configureBackgroundUpdates()
+        }
+    }
     
     @Published var lastLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus
@@ -33,6 +39,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         // Set default update interval if not already set
         if UserDefaults.standard.double(forKey: "locationUpdateInterval") == 0 {
             UserDefaults.standard.set(60.0, forKey: "locationUpdateInterval") // Default to 1 minute
+        }
+        
+        // Set default minimum movement threshold if not already set
+        if UserDefaults.standard.double(forKey: "minimumMovementThreshold") == 0 {
+            UserDefaults.standard.set(1000.0, forKey: "minimumMovementThreshold") // Default to 1km
         }
         
         authorizationStatus = locationManager.authorizationStatus
