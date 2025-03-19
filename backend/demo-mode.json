@@ -54,6 +54,7 @@
                     "latitude": 37.7879,
                     "longitude": -122.4075,
                     "accuracy": 1200,
+                    "desiredAccuracy": 2400,
                     "lastUpdated": 1710892800000
                 }
             },
@@ -74,6 +75,7 @@
                     "latitude": 37.7879,
                     "longitude": -122.4075,
                     "accuracy": 1000,
+                    "desiredAccuracy": 2000,
                     "lastUpdated": 1710892800000
                 }
             }

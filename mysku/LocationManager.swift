@@ -8,31 +8,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private let apiManager = APIManager.shared
     
-    // Restore and improve the auto-refresh related properties
-    @Published var updateInterval: TimeInterval = UserDefaults.standard.double(forKey: "locationUpdateInterval") {
-        didSet {
-            UserDefaults.standard.set(updateInterval, forKey: "locationUpdateInterval")
-            configureBackgroundUpdates()
-        }
-    }
-    
-    @Published var minimumMovementThreshold: Double = UserDefaults.standard.double(forKey: "minimumMovementThreshold") {
-        didSet {
-            UserDefaults.standard.set(minimumMovementThreshold, forKey: "minimumMovementThreshold")
-            configureBackgroundUpdates()
-        }
-    }
-    
-    @Published var lastLocation: CLLocation?
-    @Published var authorizationStatus: CLAuthorizationStatus
-    @Published var showingBackgroundPrompt = false
-    @Published var backgroundUpdatesEnabled: Bool = UserDefaults.standard.bool(forKey: "backgroundUpdatesEnabled") {
-        didSet {
-            UserDefaults.standard.set(backgroundUpdatesEnabled, forKey: "backgroundUpdatesEnabled")
-            configureBackgroundUpdates()
-        }
-    }
-    
     private var lastReportedLocation: CLLocation?
     
     override init() {
@@ -46,11 +21,16 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             UserDefaults.standard.set(1000.0, forKey: "minimumMovementThreshold") // Default to 1km
         }
         
+        // Set default desired accuracy if not already set
+        if UserDefaults.standard.double(forKey: "desiredAccuracy") == 0 {
+            UserDefaults.standard.set(0.0, forKey: "desiredAccuracy") // Default to full accuracy
+        }
+        
         authorizationStatus = locationManager.authorizationStatus
         super.init()
         print("📍 LocationManager: Initializing...")
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyReduced
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.pausesLocationUpdatesAutomatically = true
         
         // Configure background updates based on stored settings
@@ -195,17 +175,19 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let isBackgroundUpdate = UIApplication.shared.applicationState == .background
         
         print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Location update - Lat: \(location.coordinate.latitude), Lon: \(location.coordinate.longitude)")
-        print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Accuracy: \(Int(location.horizontalAccuracy))m")
+        print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - GPS Accuracy: \(Int(location.horizontalAccuracy))m")
+        print("📍 LocationManager: \(isBackgroundUpdate ? "BACKGROUND" : "Foreground") - Desired Accuracy: \(Int(desiredAccuracy))m")
         
         // Update our stored values
         lastLocation = location
         lastReportedLocation = location
         
-        // Update location through APIManager
+        // Update location through APIManager with both actual and desired accuracy
         let newLocation = Location(
             latitude: location.coordinate.latitude,
             longitude: location.coordinate.longitude,
-            accuracy: location.horizontalAccuracy,
+            accuracy: location.horizontalAccuracy, // Actual GPS accuracy
+            desiredAccuracy: desiredAccuracy, // User's desired privacy-preserving accuracy
             lastUpdated: Date().timeIntervalSince1970 * 1000
         )
         
@@ -318,6 +300,51 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             print("📍 LocationManager: Permission not determined yet")
         default:
             print("📍 LocationManager: Other authorization status: \(status)")
+        }
+    }
+    
+    private func handleLocationSettingsChange() {
+        Task {
+            do {
+                try await requestLocationUpdate()
+                await apiManager.loadInitialData()
+            } catch {
+                print("📍 LocationManager: Failed to update location after settings change - \(error)")
+            }
+        }
+    }
+    
+    @Published var updateInterval: TimeInterval = UserDefaults.standard.double(forKey: "locationUpdateInterval") {
+        didSet {
+            UserDefaults.standard.set(updateInterval, forKey: "locationUpdateInterval")
+            configureBackgroundUpdates()
+            handleLocationSettingsChange()
+        }
+    }
+    
+    @Published var minimumMovementThreshold: Double = UserDefaults.standard.double(forKey: "minimumMovementThreshold") {
+        didSet {
+            UserDefaults.standard.set(minimumMovementThreshold, forKey: "minimumMovementThreshold")
+            configureBackgroundUpdates()
+            handleLocationSettingsChange()
+        }
+    }
+    
+    @Published var lastLocation: CLLocation?
+    @Published var authorizationStatus: CLAuthorizationStatus
+    @Published var showingBackgroundPrompt = false
+    @Published var backgroundUpdatesEnabled: Bool = UserDefaults.standard.bool(forKey: "backgroundUpdatesEnabled") {
+        didSet {
+            UserDefaults.standard.set(backgroundUpdatesEnabled, forKey: "backgroundUpdatesEnabled")
+            configureBackgroundUpdates()
+            handleLocationSettingsChange()
+        }
+    }
+    
+    @Published var desiredAccuracy: Double = UserDefaults.standard.double(forKey: "desiredAccuracy") {
+        didSet {
+            UserDefaults.standard.set(desiredAccuracy, forKey: "desiredAccuracy")
+            handleLocationSettingsChange()
         }
     }
 }

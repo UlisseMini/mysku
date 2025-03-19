@@ -76,8 +76,9 @@ if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) {
 const LocationSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
-    accuracy: z.number(), // meters; privacy radius is computed clientside
-    lastUpdated: z.number() // Unix timestamp in milliseconds
+    accuracy: z.number(),      // Actual GPS accuracy in meters
+    desiredAccuracy: z.number(), // User's desired privacy-preserving accuracy in meters
+    lastUpdated: z.number()
 });
 
 const PrivacySettingsSchema = z.object({
@@ -299,9 +300,30 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
     }
 };
 
+// Add rounding helper at the top with other utility functions
+function roundCoordinates(location: Location): Location {
+    // If no desired accuracy specified, return original location
+    if (!location.desiredAccuracy || location.desiredAccuracy <= 0) {
+        return location;
+    }
+
+    // Convert accuracy from meters to degrees (approximate)
+    // 1 degree is roughly 111km at the equator
+    const accuracyInDegrees = location.desiredAccuracy / 111000;
+
+    return {
+        ...location,
+        latitude: Math.round(location.latitude / accuracyInDegrees) * accuracyInDegrees,
+        longitude: Math.round(location.longitude / accuracyInDegrees) * accuracyInDegrees,
+        // Set accuracy to max of actual GPS accuracy and desired accuracy
+        accuracy: Math.max(location.accuracy, location.desiredAccuracy)
+    };
+}
+
 // Get all users we have access to see
 app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
+    console.log('GET /users: Processing request for user:', user.id);
 
     // Filter users based on guild membership and privacy settings
     const visibleUsers: User[] = Object.values(users).filter(otherUser => {
@@ -318,30 +340,55 @@ app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
         // If either user has blocked the other, return user without location
         if (user.privacy.blockedUsers.includes(otherUser.id) ||
             otherUser.privacy.blockedUsers.includes(user.id)) {
+            console.log(`GET /users: User ${otherUser.id} is blocked, removing location`);
             return {
                 ...otherUser,
                 location: undefined
             };
         }
-        return otherUser;
+
+        // Round coordinates based on the user's requested accuracy
+        if (otherUser.location) {
+            console.log(`GET /users: Processing location for user ${otherUser.id}:`, {
+                original: otherUser.location,
+                rounded: roundCoordinates(otherUser.location)
+            });
+        }
+
+        return {
+            ...otherUser,
+            location: roundCoordinates(otherUser.location!)
+        };
     });
 
-    res.json(jiggleUsers(visibleUsers));
+    const jiggledUsers = jiggleUsers(visibleUsers);
+    console.log('GET /users: Final user count:', jiggledUsers.length);
+    res.json(jiggledUsers);
 });
 
 // Update user data (location, privacy settings, etc)
-app.post('/users/me', verifyToken, (req: Request, res: ExpressResponse): void => {
+app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): Promise<void> => {
     const currentUser = req.user!;
+    console.log('POST /users/me: Received update request:', {
+        userId: currentUser.id,
+        body: req.body
+    });
 
     try {
-        // Add lastUpdated to location if present
-        const body = req.body;
-        if (body.location) {
-            body.location.lastUpdated = Date.now();
-        }
+        const { username, guild, location, privacy } = req.body;
 
-        // Validate the entire user object using Zod
-        const updatedUser = UserSchema.parse(body);
+        // Update user data
+        const updatedUser = UserSchema.parse({
+            id: currentUser.id,
+            duser: currentUser.duser,
+            privacy: privacy,
+            location: location ? roundCoordinates(location) : undefined
+        });
+
+        console.log('POST /users/me: Validated and processed user data:', {
+            userId: updatedUser.id,
+            location: updatedUser.location
+        });
 
         // Ensure the user can only update their own data
         if (currentUser.id !== updatedUser.id) {
@@ -355,12 +402,16 @@ app.post('/users/me', verifyToken, (req: Request, res: ExpressResponse): void =>
         res.json({ success: true });
     } catch (error) {
         if (error instanceof z.ZodError) {
-            console.error('POST users/me: invalid user data:', error.errors);
+            console.error('POST /users/me: Validation error:', {
+                errors: error.errors,
+                receivedData: req.body
+            });
             res.status(400).json({
                 error: 'Invalid user data',
                 details: error.errors
             });
         } else {
+            console.error('POST /users/me: Unexpected error:', error);
             res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -634,8 +685,6 @@ function saveDataToDisk() {
     }
 }
 
-
-
 // Incredibly cursed bullshit
 // Basically: When we round to a grid people end up in the exact same spot,
 // so we spread them out a bit. This doesn't compromise privacy at all since we
@@ -643,6 +692,8 @@ function saveDataToDisk() {
 //
 // This solves the problem when map is zoomed in, when zoomed out we 
 function jiggleUsers(users: User[]): User[] {
+    console.log('jiggleUsers: Starting with', users.length, 'users');
+
     // Group users with a location by a 4km grid.
     const clusters: Record<string, User[]> = {};
     for (const user of users) {
@@ -652,30 +703,40 @@ function jiggleUsers(users: User[]): User[] {
         clusters[key] = clusters[key] || [];
         clusters[key].push(user);
     }
+    console.log('jiggleUsers: Found', Object.keys(clusters).length, 'clusters');
 
     // For each cluster, spread users evenly on a circle.
     const jiggledMap = new Map<string, User>();
     for (const key in clusters) {
         const cluster = clusters[key];
         const n = cluster.length;
+        console.log(`jiggleUsers: Processing cluster ${key} with ${n} users`);
+
         cluster.forEach((user, i) => {
-            const { latitude, longitude, accuracy, lastUpdated } = user.location!;
+            const { latitude, longitude, accuracy, desiredAccuracy, lastUpdated } = user.location!;
             const angle = (2 * Math.PI * i) / n;
-            // Use half the accuracy as the offset (in meters).
             const offset = accuracy / 2;
-            // Convert meters to degrees. 1° latitude is roughly 111320m.
             const dLat = (offset * Math.cos(angle)) / 111320;
             const dLon = (offset * Math.sin(angle)) / (111320 * Math.cos(latitude * Math.PI / 180));
+
             const newLoc = {
                 latitude: latitude + dLat,
                 longitude: longitude + dLon,
                 accuracy,
+                desiredAccuracy,
                 lastUpdated,
             };
+
+            console.log(`jiggleUsers: User ${user.id} location:`, {
+                original: user.location,
+                jiggled: newLoc
+            });
+
             jiggledMap.set(user.id, { ...user, location: newLoc });
         });
     }
 
-    // Return a new list preserving original order.
-    return users.map(user => user.location && jiggledMap.has(user.id) ? jiggledMap.get(user.id)! : user);
+    const result = users.map(user => user.location && jiggledMap.has(user.id) ? jiggledMap.get(user.id)! : user);
+    console.log('jiggleUsers: Returning', result.length, 'users');
+    return result;
 }

@@ -5,7 +5,8 @@ import Foundation
 struct Location: Codable {
     let latitude: Double
     let longitude: Double
-    let accuracy: Double
+    let accuracy: Double      // Actual GPS accuracy in meters
+    let desiredAccuracy: Double? // User's desired privacy-preserving accuracy in meters
     let lastUpdated: TimeInterval // Unix timestamp in milliseconds
     
     var formattedTimeSinceUpdate: String {
@@ -201,6 +202,7 @@ class APIManager: ObservableObject {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             let encoder = JSONEncoder()
             request.httpBody = try encoder.encode(body)
+            print("🌐 APIManager: Request body for \(endpoint):", String(data: request.httpBody!, encoding: .utf8) ?? "nil")
         }
         
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -208,6 +210,9 @@ class APIManager: ObservableObject {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NSError(domain: "APIManager", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
         }
+        
+        print("🌐 APIManager: Response for \(endpoint):", httpResponse.statusCode)
+        print("🌐 APIManager: Response data:", String(data: data, encoding: .utf8) ?? "nil")
         
         guard httpResponse.statusCode == 200 else {
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
@@ -226,7 +231,14 @@ class APIManager: ObservableObject {
         }
         
         let decoder = JSONDecoder()
-        return try decoder.decode(T.self, from: data)
+        do {
+            let result = try decoder.decode(T.self, from: data)
+            print("🌐 APIManager: Successfully decoded response for \(endpoint)")
+            return result
+        } catch {
+            print("🌐 APIManager: Decoding error for \(endpoint):", error)
+            throw error
+        }
     }
     
     // MARK: - User Methods

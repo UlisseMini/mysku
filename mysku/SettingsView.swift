@@ -185,92 +185,104 @@ struct UserRow: View {
     }
 }
 
-// MARK: - Settings View
-struct SettingsView: View {
-    @StateObject private var authManager = AuthManager.shared
-    @StateObject private var apiManager = APIManager.shared
-    @StateObject private var locationManager = LocationManager.shared
-    @State private var selectedGuilds: Set<String> = []
-    @State private var blockedUsers: [String] = []
-    @State private var isSaving = false
-    @State private var guildSearchText = ""
-    @State private var userSearchText = ""
-    @State private var privacyRadius: Double = UserDefaults.standard.double(forKey: "privacyRadius")
-    
-    // Refresh interval options in seconds
-    private let refreshIntervals = [
-        60.0: "1 minute",
-        600.0: "10 minutes",
-        3600.0: "1 hour",
-        21600.0: "6 hours",
-        86400.0: "1 day"
-    ]
+// MARK: - Location Settings View
+private struct LocationSettingsView: View {
+    @ObservedObject var locationManager: LocationManager
     
     var body: some View {
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            // Direct content for iPad
-            SettingsListContent(
-                authManager: authManager,
-                apiManager: apiManager,
-                locationManager: locationManager,
-                selectedGuilds: $selectedGuilds,
-                blockedUsers: $blockedUsers,
-                isSaving: $isSaving,
-                guildSearchText: $guildSearchText,
-                userSearchText: $userSearchText,
-                privacyRadius: $privacyRadius,
-                refreshIntervals: refreshIntervals,
-                saveUserSettings: saveUserSettings
-            )
-            .navigationTitle("Settings")
-            .scrollContentBackground(.hidden)
-            .background(Color(uiColor: .systemBackground))
-        } else {
-            // Navigation view for iPhone
-            NavigationView {
-                SettingsListContent(
-                    authManager: authManager,
-                    apiManager: apiManager,
-                    locationManager: locationManager,
-                    selectedGuilds: $selectedGuilds,
-                    blockedUsers: $blockedUsers,
-                    isSaving: $isSaving,
-                    guildSearchText: $guildSearchText,
-                    userSearchText: $userSearchText,
-                    privacyRadius: $privacyRadius,
-                    refreshIntervals: refreshIntervals,
-                    saveUserSettings: saveUserSettings
-                )
-                .navigationTitle("Settings")
-                .scrollContentBackground(.hidden)
-                .background(Color(uiColor: .systemBackground))
+        Section(header: Text("Location Settings")) {
+            Toggle("Background Updates", isOn: $locationManager.backgroundUpdatesEnabled)
+            
+            if locationManager.backgroundUpdatesEnabled {
+                Picker("Update Interval", selection: $locationManager.updateInterval) {
+                    Text("30 seconds").tag(30.0)
+                    Text("1 minute").tag(60.0)
+                    Text("5 minutes").tag(300.0)
+                    Text("15 minutes").tag(900.0)
+                    Text("30 minutes").tag(1800.0)
+                    Text("1 hour").tag(3600.0)
+                }
+                .pickerStyle(.menu)
+                
+                Picker("Minimum Movement", selection: $locationManager.minimumMovementThreshold) {
+                    Text("100m").tag(100.0)
+                    Text("500m").tag(500.0)
+                    Text("1km").tag(1000.0)
+                    Text("5km").tag(5000.0)
+                    Text("10km").tag(10000.0)
+                }
+                .pickerStyle(.menu)
+            }
+            
+            Picker("Location Privacy", selection: $locationManager.desiredAccuracy) {
+                Text("Full Accuracy").tag(0.0)
+                Text("1 km").tag(1000.0)
+                Text("5 km").tag(5000.0)
+                Text("10 km").tag(10000.0)
+                Text("100 km").tag(100000.0)
+            }
+            .pickerStyle(.menu)
+        }
+    }
+}
+
+// MARK: - Account Actions View
+private struct AccountActionsView: View {
+    @ObservedObject var authManager: AuthManager
+    @Binding var showingDeleteConfirmation: Bool
+    let deleteUserDataAndLogout: () -> Void
+    
+    var body: some View {
+        Section {
+            Button(action: {
+                authManager.logout()
+            }) {
+                HStack {
+                    Text("Logout")
+                        .foregroundColor(.red)
+                    Spacer()
+                    Image(systemName: "arrow.right.circle.fill")
+                        .foregroundColor(.red)
+                }
+            }
+            
+            Button(action: {
+                showingDeleteConfirmation = true
+            }) {
+                HStack {
+                    Text("Delete My Data")
+                        .foregroundColor(.red)
+                    Spacer()
+                    Image(systemName: "trash.fill")
+                        .foregroundColor(.red)
+                }
             }
         }
     }
+}
+
+// MARK: - Loading Overlay View
+private struct LoadingOverlayView: View {
+    let isLoading: Bool
+    let isSaving: Bool
     
-    private func saveUserSettings() {
-        guard let currentUser = apiManager.currentUser else { return }
-        
-        Task {
-            isSaving = true
-            do {
-                let updatedUser = User(
-                    id: currentUser.id,
-                    location: currentUser.location,
-                    duser: currentUser.duser,
-                    privacy: PrivacySettings(
-                        enabledGuilds: Array(selectedGuilds),
-                        blockedUsers: blockedUsers
-                    )
-                )
-                
-                try await apiManager.updateCurrentUser(updatedUser)
-                // Refresh data since enabled guilds/blocked users affect visible users
-                await apiManager.loadInitialData()
-            } catch {
-                // Error will be shown through APIManager.error
+    var body: some View {
+        ZStack {
+            if isLoading {
+                ProgressView()
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(8)
+                    .shadow(radius: 2)
             }
-            isSaving = false
+            
+            if isSaving {
+                ProgressView()
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(8)
+                    .shadow(radius: 2)
+            }
         }
     }
 }
@@ -286,9 +298,10 @@ private struct SettingsListContent: View {
     @Binding var guildSearchText: String
     @Binding var userSearchText: String
     @Binding var privacyRadius: Double
+    @Binding var showingDeleteConfirmation: Bool
     let refreshIntervals: [TimeInterval: String]
     let saveUserSettings: () -> Void
-    @State private var showingDeleteConfirmation = false
+    let deleteUserDataAndLogout: () -> Void
     
     // Distance options and their display values
     private let distanceOptions: [(value: Double, display: String)] = [
@@ -297,15 +310,6 @@ private struct SettingsListContent: View {
         (10000.0, "10 kilometers"),
         (100000.0, "100 kilometers")
     ]
-    
-    private func formatDistance(_ meters: Double) -> String {
-        if meters >= 1000 {
-            let km = meters / 1000
-            return "\(Int(km))km"
-        } else {
-            return "\(Int(meters))m"
-        }
-    }
     
     var body: some View {
         List {
@@ -368,43 +372,7 @@ private struct SettingsListContent: View {
             
             // Location Settings Section
             Section {
-                if locationManager.authorizationStatus == .authorizedAlways {
-                    Toggle("Background Location Updates", isOn: $locationManager.backgroundUpdatesEnabled)
-                        .onChange(of: locationManager.backgroundUpdatesEnabled) { _ in
-                            // The property observer in LocationManager will handle saving
-                        }
-                    
-                    if locationManager.backgroundUpdatesEnabled {
-                        Picker("Update Interval", selection: $locationManager.updateInterval) {
-                            ForEach(Array(refreshIntervals.keys.sorted()), id: \.self) { interval in
-                                Text(refreshIntervals[interval] ?? "\(Int(interval))s")
-                                    .tag(interval)
-                            }
-                        }
-                        
-                        Picker("Minimum Movement", selection: $locationManager.minimumMovementThreshold) {
-                            ForEach(distanceOptions, id: \.value) { option in
-                                Text(option.display).tag(option.value)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Background Location Disabled")
-                            .font(.headline)
-                        
-                        Text("Enable 'Always' location permission to allow background updates.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Button("Request Background Permission") {
-                            locationManager.requestAlwaysAuthorization()
-                        }
-                        .padding(.top, 4)
-                    }
-                    .padding(.vertical, 8)
-                }
+                LocationSettingsView(locationManager: locationManager)
             } header: {
                 Text("LOCATION SETTINGS")
                     .font(.subheadline)
@@ -417,32 +385,12 @@ private struct SettingsListContent: View {
                 }
             }
             
-            // Logout and Delete Section
-            Section {
-                Button(action: {
-                    authManager.logout()
-                }) {
-                    HStack {
-                        Text("Logout")
-                            .foregroundColor(.red)
-                        Spacer()
-                        Image(systemName: "arrow.right.circle.fill")
-                            .foregroundColor(.red)
-                    }
-                }
-                
-                Button(action: {
-                    showingDeleteConfirmation = true
-                }) {
-                    HStack {
-                        Text("Delete My Data")
-                            .foregroundColor(.red)
-                        Spacer()
-                        Image(systemName: "trash.fill")
-                            .foregroundColor(.red)
-                    }
-                }
-            }
+            // Account Actions Section
+            AccountActionsView(
+                authManager: authManager,
+                showingDeleteConfirmation: $showingDeleteConfirmation,
+                deleteUserDataAndLogout: deleteUserDataAndLogout
+            )
         }
         .task {
             if apiManager.currentUser == nil {
@@ -454,24 +402,9 @@ private struct SettingsListContent: View {
                 blockedUsers = user.privacy.blockedUsers
             }
         }
-        .overlay(alignment: .top) {
-            if apiManager.isLoading {
-                ProgressView()
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(8)
-                    .shadow(radius: 2)
-            }
+        .overlay {
+            LoadingOverlayView(isLoading: apiManager.isLoading, isSaving: isSaving)
         }
-        .overlay(Group {
-            if isSaving {
-                ProgressView()
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(8)
-                    .shadow(radius: 2)
-            }
-        })
         .alert("Delete Account Data", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -479,6 +412,101 @@ private struct SettingsListContent: View {
             }
         } message: {
             Text("This will permanently delete all your data including location history and preferences. This action cannot be undone.")
+        }
+    }
+}
+
+// MARK: - Settings View
+struct SettingsView: View {
+    @StateObject private var authManager = AuthManager.shared
+    @StateObject private var apiManager = APIManager.shared
+    @StateObject private var locationManager = LocationManager.shared
+    @State private var selectedGuilds: Set<String> = []
+    @State private var blockedUsers: [String] = []
+    @State private var isSaving = false
+    @State private var guildSearchText = ""
+    @State private var userSearchText = ""
+    @State private var privacyRadius: Double = UserDefaults.standard.double(forKey: "privacyRadius")
+    @State private var showingDeleteConfirmation = false
+    
+    // Refresh interval options in seconds
+    private let refreshIntervals = [
+        60.0: "1 minute",
+        600.0: "10 minutes",
+        3600.0: "1 hour",
+        21600.0: "6 hours",
+        86400.0: "1 day"
+    ]
+    
+    var body: some View {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // Direct content for iPad
+            SettingsListContent(
+                authManager: authManager,
+                apiManager: apiManager,
+                locationManager: locationManager,
+                selectedGuilds: $selectedGuilds,
+                blockedUsers: $blockedUsers,
+                isSaving: $isSaving,
+                guildSearchText: $guildSearchText,
+                userSearchText: $userSearchText,
+                privacyRadius: $privacyRadius,
+                showingDeleteConfirmation: $showingDeleteConfirmation,
+                refreshIntervals: refreshIntervals,
+                saveUserSettings: saveUserSettings,
+                deleteUserDataAndLogout: deleteUserDataAndLogout
+            )
+            .navigationTitle("Settings")
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemBackground))
+        } else {
+            // Navigation view for iPhone
+            NavigationView {
+                SettingsListContent(
+                    authManager: authManager,
+                    apiManager: apiManager,
+                    locationManager: locationManager,
+                    selectedGuilds: $selectedGuilds,
+                    blockedUsers: $blockedUsers,
+                    isSaving: $isSaving,
+                    guildSearchText: $guildSearchText,
+                    userSearchText: $userSearchText,
+                    privacyRadius: $privacyRadius,
+                    showingDeleteConfirmation: $showingDeleteConfirmation,
+                    refreshIntervals: refreshIntervals,
+                    saveUserSettings: saveUserSettings,
+                    deleteUserDataAndLogout: deleteUserDataAndLogout
+                )
+                .navigationTitle("Settings")
+                .scrollContentBackground(.hidden)
+                .background(Color(uiColor: .systemBackground))
+            }
+        }
+    }
+    
+    private func saveUserSettings() {
+        guard let currentUser = apiManager.currentUser else { return }
+        
+        Task {
+            isSaving = true
+            do {
+                let updatedUser = User(
+                    id: currentUser.id,
+                    location: currentUser.location,
+                    duser: currentUser.duser,
+                    privacy: PrivacySettings(
+                        enabledGuilds: Array(selectedGuilds),
+                        blockedUsers: blockedUsers
+                    )
+                )
+                
+                try await apiManager.updateCurrentUser(updatedUser)
+                // Refresh data since enabled guilds/blocked users affect visible users
+                await apiManager.loadInitialData()
+            } catch {
+                // Error will be shown through APIManager.error
+            }
+            isSaving = false
         }
     }
     
