@@ -202,6 +202,7 @@ struct SettingsView: View {
         60.0: "1 minute",
         600.0: "10 minutes",
         3600.0: "1 hour",
+        21600.0: "6 hours",
         86400.0: "1 day"
     ]
     
