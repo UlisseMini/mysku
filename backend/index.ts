@@ -19,6 +19,96 @@ const DB_DIR = fs.existsSync("/db") ? "/db" : path.join(__dirname, 'db');
 const USERS_FILE = path.join(DB_DIR, 'users.json');
 const TOKENS_FILE = path.join(DB_DIR, 'tokenToUserId.json');
 
+// Error reporting webhook URL from environment variable
+const ERROR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1353024080550301788/UcxP89nUSNEQ_994CAYXrJVFPyXxOQtB3rBolgZ2-hgb23XBjQ4R2BCnd-MkFwNlcIzQ';
+
+// Function to report errors to webhook
+async function reportErrorToWebhook(error: Error, req?: Request): Promise<void> {
+    if (!ERROR_WEBHOOK_URL) {
+        console.warn('Error webhook URL not configured. Set ERROR_WEBHOOK_URL in .env file to enable error reporting.');
+        return;
+    }
+
+    try {
+        // Create readable timestamp
+        const timestamp = new Date().toISOString();
+
+        // Format stack trace - limit to first 4 lines if it's too long
+        const stackLines = error.stack?.split('\n') || [];
+        const limitedStack = stackLines.slice(0, 4).join('\n');
+        const stackTrace = limitedStack + (stackLines.length > 4 ? '\n...(truncated)' : '');
+
+        // Create Discord webhook message with embeds for better formatting
+        const webhookPayload = {
+            content: "🚨 **Server Error Detected** 🚨",
+            embeds: [
+                {
+                    title: `Error: ${error.name}`,
+                    description: error.message,
+                    color: 15548997, // Red color
+                    fields: [
+                        {
+                            name: "📋 Stack Trace",
+                            value: `\`\`\`\n${stackTrace}\n\`\`\``,
+                            inline: false
+                        },
+                        {
+                            name: "⏰ Timestamp",
+                            value: timestamp,
+                            inline: true
+                        }
+                    ],
+                    footer: {
+                        text: "MySkew Error Monitoring"
+                    }
+                }
+            ]
+        };
+
+        // Add request details if available
+        if (req) {
+            const requestDetailsField = {
+                name: "🌐 Request Details",
+                value: [
+                    `**Method:** ${req.method}`,
+                    `**Path:** ${req.url}`,
+                    `**IP:** ${req.ip}`,
+                    `**User-Agent:** ${req.headers['user-agent'] || 'N/A'}`
+                ].join('\n'),
+                inline: false
+            };
+
+            // Add query params if present
+            if (Object.keys(req.query).length > 0) {
+                requestDetailsField.value += `\n**Query:** \`${JSON.stringify(req.query).slice(0, 500)}\``;
+            }
+
+            // Add body if present (truncate if too large)
+            if (req.body && Object.keys(req.body).length > 0) {
+                let bodyStr = JSON.stringify(req.body);
+                if (bodyStr.length > 500) {
+                    bodyStr = bodyStr.slice(0, 497) + '...';
+                }
+                requestDetailsField.value += `\n**Body:** \`${bodyStr}\``;
+            }
+
+            webhookPayload.embeds[0].fields.push(requestDetailsField);
+        }
+
+        await fetch(ERROR_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(webhookPayload)
+        });
+
+        console.log('Error reported to webhook');
+    } catch (webhookError) {
+        console.error('Failed to report error to webhook:', webhookError);
+    }
+}
+
 // Cache interfaces and implementations
 interface CacheEntry<T> {
     data: T;
@@ -296,6 +386,7 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
         next();
     } catch (error) {
         console.error('verify: Token verification error:', error);
+        await reportErrorToWebhook(error as Error, req);
         res.status(500).json({ error: 'Failed to verify token' });
     }
 };
@@ -653,6 +744,33 @@ app.delete('/delete-data', verifyToken, async (req: Request, res: ExpressRespons
 // Start the server
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
+});
+
+// Global error handling middleware - add before the export
+app.use((err: Error, req: Request, res: ExpressResponse, next: NextFunction) => {
+    console.error('Unhandled error:', err);
+
+    // Report error to webhook
+    reportErrorToWebhook(err, req).catch(webhookError => {
+        console.error('Failed to report error to webhook:', webhookError);
+    });
+
+    // Send error response to client
+    if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Handle uncaught exceptions and promise rejections
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    reportErrorToWebhook(error).catch(console.error);
+});
+
+process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    console.error('Unhandled Rejection:', error);
+    reportErrorToWebhook(error).catch(console.error);
 });
 
 // Add explicit export to mark as ESM module
