@@ -77,7 +77,7 @@ const LocationSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
     accuracy: z.number(),      // Actual GPS accuracy in meters
-    desiredAccuracy: z.number(), // User's desired privacy-preserving accuracy in meters
+    desiredAccuracy: z.number().optional(), // User's desired privacy-preserving accuracy in meters (optional for backward compatibility)
     lastUpdated: z.number()
 });
 
@@ -302,21 +302,31 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
 
 // Add rounding helper at the top with other utility functions
 function roundCoordinates(location: Location): Location {
-    // If no desired accuracy specified, return original location
-    if (!location.desiredAccuracy || location.desiredAccuracy <= 0) {
+    // Handle cases where the location is undefined
+    if (!location) {
+        return location;
+    }
+
+    // Default to 3km (3000 meters) if desiredAccuracy isn't specified
+    const desiredAccuracy = location.desiredAccuracy || 3000;
+
+    // If desired accuracy is 0 or negative, return original location
+    if (desiredAccuracy <= 0) {
         return location;
     }
 
     // Convert accuracy from meters to degrees (approximate)
     // 1 degree is roughly 111km at the equator
-    const accuracyInDegrees = location.desiredAccuracy / 111000;
+    const accuracyInDegrees = desiredAccuracy / 111000;
 
     return {
         ...location,
+        // Ensure desiredAccuracy is included in the result
+        desiredAccuracy,
         latitude: Math.round(location.latitude / accuracyInDegrees) * accuracyInDegrees,
         longitude: Math.round(location.longitude / accuracyInDegrees) * accuracyInDegrees,
         // Set accuracy to max of actual GPS accuracy and desired accuracy
-        accuracy: Math.max(location.accuracy, location.desiredAccuracy)
+        accuracy: Math.max(location.accuracy, desiredAccuracy)
     };
 }
 
@@ -713,7 +723,9 @@ function jiggleUsers(users: User[]): User[] {
         console.log(`jiggleUsers: Processing cluster ${key} with ${n} users`);
 
         cluster.forEach((user, i) => {
-            const { latitude, longitude, accuracy, desiredAccuracy, lastUpdated } = user.location!;
+            const { latitude, longitude, accuracy, lastUpdated } = user.location!;
+            // Default desiredAccuracy to 3000 meters if not present
+            const desiredAccuracy = user.location!.desiredAccuracy || 3000;
             const angle = (2 * Math.PI * i) / n;
             const offset = accuracy / 2;
             const dLat = (offset * Math.cos(angle)) / 111320;
