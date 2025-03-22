@@ -26,6 +26,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             UserDefaults.standard.set(0.0, forKey: "desiredAccuracy") // Default to full accuracy
         }
         
+        // Enable background updates by default if not already set
+        if !UserDefaults.standard.bool(forKey: "backgroundUpdatesEnabled") {
+            UserDefaults.standard.set(true, forKey: "backgroundUpdatesEnabled")
+        }
+        
         authorizationStatus = locationManager.authorizationStatus
         super.init()
         print("📍 LocationManager: Initializing...")
