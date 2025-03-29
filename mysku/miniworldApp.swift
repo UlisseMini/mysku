@@ -6,6 +6,9 @@ struct miniworldApp: App {
     @UIApplicationDelegateAdaptor(NotificationHandler.self) var notificationHandler
     
     init() {
+        // Log backend URL
+        print("🌐 Backend URL: \(Constants.backendURL)")
+        
         // Configure URL session
         URLSession.shared.configuration.httpCookieStorage?.cookieAcceptPolicy = .always
         
