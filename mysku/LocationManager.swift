@@ -292,6 +292,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         switch status {
         case .authorizedAlways:
             print("📍 LocationManager: User granted always permission")
+            // Enable background updates by default when always permission is granted
+            backgroundUpdatesEnabled = true
             // Reconfigure background updates now that we have permission
             configureBackgroundUpdates()
             startUpdatingLocation()
