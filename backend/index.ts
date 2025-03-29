@@ -907,9 +907,35 @@ async function checkNearbyUsers() {
 setInterval(checkNearbyUsers, 60000); // Check every minute
 
 // Start the server
-app.listen(port, () => {
+const server = app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
+
+// Handle graceful shutdown
+const shutdown = async () => {
+    console.log('\nReceived shutdown signal. Closing server...');
+
+    // Close the server
+    server.close(() => {
+        console.log('Server closed');
+
+        // Close APNs provider if it exists
+        if (apnProvider) {
+            apnProvider.shutdown();
+            console.log('APNs provider closed');
+        }
+
+        // Save any pending data
+        saveDataToDisk();
+
+        console.log('Cleanup complete. Exiting...');
+        process.exit(0);
+    });
+};
+
+// Handle SIGINT (Ctrl+C) and SIGTERM signals
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // Global error handling middleware - add before the export
 app.use((err: Error, req: Request, res: ExpressResponse, next: NextFunction) => {
