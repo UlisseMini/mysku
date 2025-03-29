@@ -1,10 +1,34 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct miniworldApp: App {
+    @UIApplicationDelegateAdaptor(NotificationHandler.self) var notificationHandler
+    
     init() {
         // Configure URL session
         URLSession.shared.configuration.httpCookieStorage?.cookieAcceptPolicy = .always
+        
+        // Request notification authorization
+        print("🔔 miniworldApp: Requesting notification authorization...")
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if let error = error {
+                print("🔔 miniworldApp: Failed to request notification authorization:", error)
+                return
+            }
+            
+            print("🔔 miniworldApp: Notification authorization granted:", granted)
+            if granted {
+                DispatchQueue.main.async {
+                    print("🔔 miniworldApp: Registering for remote notifications...")
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            }
+        }
+        
+        // Set notification center delegate
+        print("🔔 miniworldApp: Setting notification center delegate")
+        UNUserNotificationCenter.current().delegate = notificationHandler
     }
     
     var body: some Scene {

@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
+import apn from 'node-apn';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -18,6 +19,40 @@ const __dirname = dirname(__filename);
 const DB_DIR = fs.existsSync("/db") ? "/db" : path.join(__dirname, 'db');
 const USERS_FILE = path.join(DB_DIR, 'users.json');
 const TOKENS_FILE = path.join(DB_DIR, 'tokenToUserId.json');
+const NOTIFICATIONS_FILE = path.join(DB_DIR, 'recentNotifications.json');
+
+// APNs configuration
+const APNS_KEY_ID = process.env.APNS_KEY_ID!;
+const APNS_TEAM_ID = process.env.APNS_TEAM_ID!;
+const APNS_BUNDLE_ID = process.env.APNS_BUNDLE_ID!;
+const APNS_KEY_PATH = process.env.APNS_KEY_PATH!;
+
+// Validate APNs configuration
+if (!APNS_KEY_ID || !APNS_TEAM_ID || !APNS_BUNDLE_ID || !APNS_KEY_PATH) {
+    throw new Error('Missing required APNs environment variables. Please check your .env file.');
+}
+
+if (!fs.existsSync(APNS_KEY_PATH)) {
+    throw new Error(`APNs key file not found at ${APNS_KEY_PATH}`);
+}
+
+// Initialize APNs provider
+let apnProvider: apn.Provider | null = null;
+
+try {
+    apnProvider = new apn.Provider({
+        token: {
+            key: fs.readFileSync(APNS_KEY_PATH),
+            keyId: APNS_KEY_ID,
+            teamId: APNS_TEAM_ID
+        },
+        production: process.env.NODE_ENV === 'production'
+    });
+    console.log(`APNs provider initialized successfully for environment: "${process.env.NODE_ENV}"`);
+} catch (error) {
+    console.error('Failed to initialize APNs provider:', error);
+    throw error;
+}
 
 // Error reporting webhook URL from environment variable
 const ERROR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1353024080550301788/UcxP89nUSNEQ_994CAYXrJVFPyXxOQtB3rBolgZ2-hgb23XBjQ4R2BCnd-MkFwNlcIzQ';
@@ -118,12 +153,14 @@ interface CacheEntry<T> {
 interface Cache {
     guilds: Record<string, CacheEntry<Guild[]>>;
     userGuilds: Record<string, CacheEntry<Guild>>;
+    recentNotifications: RecentNotification[];
 }
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const cache: Cache = {
     guilds: {},
-    userGuilds: {}
+    userGuilds: {},
+    recentNotifications: []
 };
 
 function isCacheValid<T>(entry?: CacheEntry<T>): boolean {
@@ -186,7 +223,8 @@ const UserSchema = z.object({
     id: z.string(),
     location: LocationSchema.optional(),
     duser: DiscordUserSchema,
-    privacy: PrivacySettingsSchema
+    privacy: PrivacySettingsSchema,
+    pushToken: z.string().optional()
 });
 
 const DiscordTokenResponseSchema = z.object({
@@ -227,6 +265,15 @@ type DiscordUser = z.infer<typeof DiscordUserSchema>;
 type User = z.infer<typeof UserSchema>;
 type DiscordTokenResponse = z.infer<typeof DiscordTokenResponseSchema>;
 type Guild = z.infer<typeof GuildSchema>;
+
+// Add schema for recent notifications
+const RecentNotificationSchema = z.object({
+    user1Id: z.string(),
+    user2Id: z.string(),
+    timestamp: z.number()
+});
+
+type RecentNotification = z.infer<typeof RecentNotificationSchema>;
 
 // Add type declaration for the extended Request
 declare global {
@@ -450,16 +497,24 @@ app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
 
         // Round coordinates based on the user's requested accuracy
         if (otherUser.location) {
-            console.log(`GET /users: Processing location for user ${otherUser.id}:`, {
-                original: otherUser.location,
-                rounded: roundCoordinates(otherUser.location)
-            });
+            // Ensure desiredAccuracy exists for migration
+            const location = {
+                ...otherUser.location,
+                desiredAccuracy: otherUser.location.desiredAccuracy ?? 0
+            };
+
+            // console.debug(`GET /users: Processing location for user ${otherUser.id}:`, {
+            //     original: location,
+            //     rounded: roundCoordinates(location)
+            // });
+
+            return {
+                ...otherUser,
+                location: roundCoordinates(location)
+            };
         }
 
-        return {
-            ...otherUser,
-            location: roundCoordinates(otherUser.location!)
-        };
+        return otherUser;
     });
 
     const jiggledUsers = jiggleUsers(visibleUsers);
@@ -476,19 +531,27 @@ app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): P
     });
 
     try {
-        const { username, guild, location, privacy } = req.body;
+        const { username, guild, location, privacy, pushToken } = req.body;
+
+        // Ensure location has desiredAccuracy for migration
+        const processedLocation = location ? {
+            ...location,
+            desiredAccuracy: location.desiredAccuracy ?? 0
+        } : undefined;
 
         // Update user data
         const updatedUser = UserSchema.parse({
             id: currentUser.id,
             duser: currentUser.duser,
             privacy: privacy,
-            location: location ? roundCoordinates(location) : undefined
+            location: processedLocation ? roundCoordinates(processedLocation) : undefined,
+            pushToken: pushToken || currentUser.pushToken // Preserve existing push token if not provided
         });
 
         console.log('POST /users/me: Validated and processed user data:', {
             userId: updatedUser.id,
-            location: updatedUser.location
+            location: updatedUser.location,
+            pushToken: updatedUser.pushToken
         });
 
         // Ensure the user can only update their own data
@@ -741,6 +804,112 @@ app.delete('/delete-data', verifyToken, async (req: Request, res: ExpressRespons
     }
 });
 
+// Function to calculate distance between two points in meters using Haversine formula
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
+
+// Function to check for nearby users and send notifications
+async function checkNearbyUsers() {
+    if (!apnProvider) {
+        console.error('Push notification service not configured');
+        return;
+    }
+
+    const usersWithLocation = Object.values(users).filter(user => user.location && user.pushToken);
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+
+    // Clean up old notifications
+    cache.recentNotifications = cache.recentNotifications.filter(notif =>
+        now - notif.timestamp < ONE_DAY
+    );
+
+    for (let i = 0; i < usersWithLocation.length; i++) {
+        for (let j = i + 1; j < usersWithLocation.length; j++) {
+            const user1 = usersWithLocation[i];
+            const user2 = usersWithLocation[j];
+
+            // Skip if either user has blocked the other
+            if (user1.privacy.blockedUsers.includes(user2.id) ||
+                user2.privacy.blockedUsers.includes(user1.id)) {
+                continue;
+            }
+
+            // Skip if users don't share any guilds
+            const sharedGuilds = user1.privacy.enabledGuilds.filter(guild =>
+                user2.privacy.enabledGuilds.includes(guild)
+            );
+            if (sharedGuilds.length === 0) continue;
+
+            // Check if we've notified this pair recently
+            const hasRecentNotification = cache.recentNotifications.some(notif =>
+                (notif.user1Id === user1.id && notif.user2Id === user2.id) ||
+                (notif.user1Id === user2.id && notif.user2Id === user1.id)
+            );
+            if (hasRecentNotification) continue;
+
+            const distance = calculateDistance(
+                user1.location!.latitude,
+                user1.location!.longitude,
+                user2.location!.longitude,
+                user2.location!.longitude
+            );
+
+            if (distance <= 500) {
+                // Send notification to user1
+                try {
+                    const notification1 = new apn.Notification();
+                    notification1.alert = {
+                        title: 'Nearby User!',
+                        body: `${user2.duser.username} is ${distance}m away! Text them to meet up!`
+                    };
+                    notification1.sound = 'default';
+                    notification1.topic = APNS_BUNDLE_ID;
+                    await apnProvider.send(notification1, user1.pushToken as string);
+                } catch (error) {
+                    console.error(`Failed to send notification to ${user1.id}:`, error);
+                }
+
+                // Send notification to user2
+                try {
+                    const notification2 = new apn.Notification();
+                    notification2.alert = {
+                        title: 'Nearby User!',
+                        body: `${user1.duser.username} is ${distance}m away! Text them to meet up!`
+                    };
+                    notification2.sound = 'default';
+                    notification2.topic = APNS_BUNDLE_ID;
+                    await apnProvider.send(notification2, user2.pushToken as string);
+                } catch (error) {
+                    console.error(`Failed to send notification to ${user2.id}:`, error);
+                }
+
+                // Record the notification
+                cache.recentNotifications.push({
+                    user1Id: user1.id,
+                    user2Id: user2.id,
+                    timestamp: now
+                });
+            }
+        }
+    }
+}
+
+// Set up periodic check for nearby users
+setInterval(checkNearbyUsers, 60000); // Check every minute
+
 // Start the server
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
@@ -794,6 +963,12 @@ function loadPersistedData() {
             Object.assign(tokenToUserId, tokenData);
             console.log(`Loaded ${Object.keys(tokenData).length} tokens from disk`);
         }
+
+        if (fs.existsSync(NOTIFICATIONS_FILE)) {
+            const notificationData = JSON.parse(fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8'));
+            cache.recentNotifications = z.array(RecentNotificationSchema).parse(notificationData);
+            console.log(`Loaded ${notificationData.length} recent notifications from disk`);
+        }
     } catch (error) {
         console.error('Error loading persisted data:', error);
     }
@@ -807,6 +982,7 @@ function saveDataToDisk() {
     try {
         fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
         fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokenToUserId, null, 2));
+        fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify(cache.recentNotifications, null, 2));
         console.log('Data persisted to disk');
     } catch (error) {
         console.error('Error saving data to disk:', error);
@@ -820,7 +996,7 @@ function saveDataToDisk() {
 //
 // This solves the problem when map is zoomed in, when zoomed out we 
 function jiggleUsers(users: User[]): User[] {
-    console.log('jiggleUsers: Starting with', users.length, 'users');
+    // console.log('jiggleUsers: Starting with', users.length, 'users');
 
     // Group users with a location by a 4km grid.
     const clusters: Record<string, User[]> = {};
@@ -831,14 +1007,14 @@ function jiggleUsers(users: User[]): User[] {
         clusters[key] = clusters[key] || [];
         clusters[key].push(user);
     }
-    console.log('jiggleUsers: Found', Object.keys(clusters).length, 'clusters');
+    // console.log('jiggleUsers: Found', Object.keys(clusters).length, 'clusters');
 
     // For each cluster, spread users evenly on a circle.
     const jiggledMap = new Map<string, User>();
     for (const key in clusters) {
         const cluster = clusters[key];
         const n = cluster.length;
-        console.log(`jiggleUsers: Processing cluster ${key} with ${n} users`);
+        // console.log(`jiggleUsers: Processing cluster ${key} with ${n} users`);
 
         cluster.forEach((user, i) => {
             const { latitude, longitude, accuracy, lastUpdated } = user.location!;
@@ -857,16 +1033,16 @@ function jiggleUsers(users: User[]): User[] {
                 lastUpdated,
             };
 
-            console.log(`jiggleUsers: User ${user.id} location:`, {
-                original: user.location,
-                jiggled: newLoc
-            });
+            // console.log(`jiggleUsers: User ${user.id} location:`, {
+            //     original: user.location,
+            //     jiggled: newLoc
+            // });
 
             jiggledMap.set(user.id, { ...user, location: newLoc });
         });
     }
 
     const result = users.map(user => user.location && jiggledMap.has(user.id) ? jiggledMap.get(user.id)! : user);
-    console.log('jiggleUsers: Returning', result.length, 'users');
+    // console.log('jiggleUsers: Returning', result.length, 'users');
     return result;
 }

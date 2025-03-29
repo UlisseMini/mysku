@@ -497,7 +497,8 @@ struct SettingsView: View {
                     privacy: PrivacySettings(
                         enabledGuilds: Array(selectedGuilds),
                         blockedUsers: blockedUsers
-                    )
+                    ),
+                    pushToken: UserDefaults.standard.string(forKey: "push_token")
                 )
                 
                 try await apiManager.updateCurrentUser(updatedUser)

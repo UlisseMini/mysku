@@ -60,6 +60,7 @@ struct User: Codable, Identifiable {
     let location: Location?
     let duser: DiscordUser
     let privacy: PrivacySettings
+    let pushToken: String?
 }
 
 struct Guild: Codable, Identifiable {
@@ -105,6 +106,10 @@ class APIManager: ObservableObject {
     
     private func getAuthToken() -> String? {
         return AuthManager.shared.token
+    }
+    
+    private func getPushToken() -> String? {
+        return UserDefaults.standard.string(forKey: "push_token")
     }
     
     // MARK: - Data Loading
@@ -249,12 +254,21 @@ class APIManager: ObservableObject {
     }
     
     func updateCurrentUser(_ user: User) async throws {
+        // Always include the current push token in updates
+        let updatedUser = User(
+            id: user.id,
+            location: user.location,
+            duser: user.duser,
+            privacy: user.privacy,
+            pushToken: getPushToken()
+        )
+        
         let _: [String: Bool] = try await makeRequest(
             endpoint: "users/me",
             method: "POST",
-            body: user
+            body: updatedUser
         )
-        currentUser = user
+        currentUser = updatedUser
     }
     
     func updateLocation(_ location: Location) async throws {
@@ -266,7 +280,8 @@ class APIManager: ObservableObject {
             id: currentUser.id,
             location: location,
             duser: currentUser.duser,
-            privacy: currentUser.privacy
+            privacy: currentUser.privacy,
+            pushToken: getPushToken()
         )
         
         try await updateCurrentUser(updatedUser)
