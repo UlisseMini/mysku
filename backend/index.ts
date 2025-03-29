@@ -25,15 +25,11 @@ const NOTIFICATIONS_FILE = path.join(DB_DIR, 'recentNotifications.json');
 const APNS_KEY_ID = process.env.APNS_KEY_ID!;
 const APNS_TEAM_ID = process.env.APNS_TEAM_ID!;
 const APNS_BUNDLE_ID = process.env.APNS_BUNDLE_ID!;
-const APNS_KEY_PATH = process.env.APNS_KEY_PATH!;
+const APNS_KEY_BASE64 = process.env.APNS_KEY_BASE64!;
 
 // Validate APNs configuration
-if (!APNS_KEY_ID || !APNS_TEAM_ID || !APNS_BUNDLE_ID || !APNS_KEY_PATH) {
+if (!APNS_KEY_ID || !APNS_TEAM_ID || !APNS_BUNDLE_ID || !APNS_KEY_BASE64) {
     throw new Error('Missing required APNs environment variables. Please check your .env file.');
-}
-
-if (!fs.existsSync(APNS_KEY_PATH)) {
-    throw new Error(`APNs key file not found at ${APNS_KEY_PATH}`);
 }
 
 // Initialize APNs provider
@@ -42,7 +38,7 @@ let apnProvider: apn.Provider | null = null;
 try {
     apnProvider = new apn.Provider({
         token: {
-            key: fs.readFileSync(APNS_KEY_PATH),
+            key: Buffer.from(APNS_KEY_BASE64, 'base64'),
             keyId: APNS_KEY_ID,
             teamId: APNS_TEAM_ID
         },
