@@ -6,6 +6,12 @@ struct miniworldApp: App {
     @UIApplicationDelegateAdaptor(NotificationHandler.self) var notificationHandler
     
     init() {
+        // Check if running UI tests
+        if ProcessInfo.processInfo.arguments.contains("-UITests") {
+            print("🧪 Running in UI Test mode")
+            setupForUITests()
+        }
+        
         // Log backend URL
         print("🌐 Backend URL: \(Constants.backendURL)")
         
@@ -32,6 +38,15 @@ struct miniworldApp: App {
         // Set notification center delegate
         print("🔔 miniworldApp: Setting notification center delegate")
         UNUserNotificationCenter.current().delegate = notificationHandler
+    }
+    
+    private func setupForUITests() {
+        // Reset user defaults if needed
+        if ProcessInfo.processInfo.arguments.contains("-ResetUserDefaults") {
+            print("🧪 Resetting UserDefaults for testing")
+            let domain = Bundle.main.bundleIdentifier!
+            UserDefaults.standard.removePersistentDomain(forName: domain)
+        }
     }
     
     var body: some Scene {
