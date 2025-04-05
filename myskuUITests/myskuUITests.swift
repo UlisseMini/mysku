@@ -11,7 +11,7 @@ final class myskuUITests: XCTestCase {
     
     override func setUpWithError() throws {
         // Allow screenshots to be taken even when tests fail
-        continueAfterFailure = true
+        continueAfterFailure = false
         
         // Reset app state for clean launch
         let app = XCUIApplication()
@@ -27,13 +27,17 @@ final class myskuUITests: XCTestCase {
     
     @MainActor
     func testFullAppFlow() throws {
-        print("======= Starting testFullAppFlow!!")
-
         let app = XCUIApplication()
         app.launch()
         
         // Take screenshot of initial launch screen
         takeScreenshot(app: app, named: "Initial Launch Screen")
+
+        // Logout if needed
+        logoutIfNeeded(app: app)
+        
+        // Take screenshot of (what should be) the login screen
+        takeScreenshot(app: app, named: "Login screen")
         
         // Login using demo mode
         loginWithDemoMode(app: app)
@@ -56,13 +60,13 @@ final class myskuUITests: XCTestCase {
                 
                 // Tap the tab
                 tab.tap()
-                sleep(1) // Wait for UI to update
                 
-                // Take screenshot after tab tap
+                // Wait for UI to update and take screenshot
+                XCTAssertTrue(app.waitForExistence(timeout: 1.0), "UI did not update after tab tap")
                 takeScreenshot(app: app, named: "After Tab \(index) Tap")
                 
-                // Additional screenshot after a short delay to ensure content is loaded
-                sleep(1)
+                // Wait for content to load and take final screenshot
+                XCTAssertTrue(app.waitForExistence(timeout: 1.0), "Content did not load after tab tap")
                 takeScreenshot(app: app, named: "Tab \(index) Content Loaded")
             }
         }
@@ -96,12 +100,35 @@ final class myskuUITests: XCTestCase {
         }
         
         alert.buttons["Yes"].tap()
-        sleep(1) // Wait for UI to update
+        
+        // Wait for UI to update after demo mode activation
+        XCTAssertTrue(app.waitForExistence(timeout: 1.0), "UI did not update after demo mode activation")
+    }
+    
+    private func logoutIfNeeded(app: XCUIApplication) {
+        // Look for settings button
+        let settingsButton = app.buttons["Settings"]
+        if settingsButton.waitForExistence(timeout: 2.0) {
+            settingsButton.tap()
+            
+            // Look for logout button at the bottom
+            let logoutButton = app.buttons["Logout"]
+            if logoutButton.waitForExistence(timeout: 2.0) {
+                logoutButton.tap()
+            } else {
+                // If logout button not found, try scrolling to bottom
+                let scrollView = app.scrollViews.firstMatch
+                if scrollView.exists {
+                    scrollView.swipeUp(velocity: .fast)
+                    if logoutButton.waitForExistence(timeout: 2.0) {
+                        logoutButton.tap()
+                    }
+                }
+            }
+        }
     }
     
     private func takeScreenshot(app: XCUIApplication, named name: String) {
-        print("==== Taking screenshot of '\(name)'")
-
         let screenshot = app.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
