@@ -43,36 +43,15 @@ final class myskuUITests: XCTestCase {
         loginWithDemoMode(app: app)
         
         // Take screenshot after demo mode activation
-        takeScreenshot(app: app, named: "After Demo Mode Activation")
+        takeScreenshot(app: app, named: "Map view")
         
-        // Check for main tab bar
-        let tabBar = app.tabBars.firstMatch
-        XCTAssertTrue(tabBar.waitForExistence(timeout: 2.0), "Tab bar not found after login")
+        // Find and click settings button
+        let settingsButton = app.buttons["Settings"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 2.0), "Settings button not found")
+        settingsButton.tap()
         
-        // Take screenshot of main screen with tab bar
-        takeScreenshot(app: app, named: "Main Screen with Tab Bar")
-        
-        // Navigate through each tab and take screenshots
-        if let tabs = tabBar.buttons.allElementsBoundByIndex as? [XCUIElement] {
-            for (index, tab) in tabs.enumerated() {
-                // Take screenshot before tab tap
-                takeScreenshot(app: app, named: "Before Tab \(index) Tap")
-                
-                // Tap the tab
-                tab.tap()
-                
-                // Wait for UI to update and take screenshot
-                XCTAssertTrue(app.waitForExistence(timeout: 1.0), "UI did not update after tab tap")
-                takeScreenshot(app: app, named: "After Tab \(index) Tap")
-                
-                // Wait for content to load and take final screenshot
-                XCTAssertTrue(app.waitForExistence(timeout: 1.0), "Content did not load after tab tap")
-                takeScreenshot(app: app, named: "Tab \(index) Content Loaded")
-            }
-        }
-        
-        // Final screenshot of the app state
-        takeScreenshot(app: app, named: "Final App State")
+        // Take screenshot after clicking settings
+        takeScreenshot(app: app, named: "Settings View")
     }
     
     // MARK: - Helper Functions
