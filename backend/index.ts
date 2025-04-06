@@ -52,6 +52,7 @@ try {
 
 // Error reporting webhook URL from environment variable
 const ERROR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1353024080550301788/UcxP89nUSNEQ_994CAYXrJVFPyXxOQtB3rBolgZ2-hgb23XBjQ4R2BCnd-MkFwNlcIzQ';
+const NEARBY_WEBHOOK_URL = 'https://discord.com/api/webhooks/1358243072642646076/dC2NbR8MaDEQAzMPXTnaDI_XVnB2iuxxvGCbrbguPn1fQyQec3igtV_RF4S7G9YEGjZb'; // Added webhook for nearby notifications
 
 // Function to report errors to webhook
 async function reportErrorToWebhook(error: Error, req?: Request): Promise<void> {
@@ -140,6 +141,39 @@ async function reportErrorToWebhook(error: Error, req?: Request): Promise<void> 
     }
 }
 
+// Function to report nearby users to webhook - NEW
+async function reportNearbyUsersToWebhook(user1: User, user2: User, distance: number): Promise<void> {
+    if (!NEARBY_WEBHOOK_URL) {
+        console.warn('Nearby webhook URL not configured.');
+        return;
+    }
+
+    try {
+        const timestamp = new Date().toISOString();
+        const message = `📍 Users Nearby Detected!
+**${user1.duser.username}** and **${user2.duser.username}** are approximately **${Math.round(distance)}m** apart.
+Timestamp: ${timestamp}`;
+
+        const webhookPayload = {
+            content: message
+        };
+
+        await fetch(NEARBY_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(webhookPayload)
+        });
+
+        console.log(`Reported nearby users (${user1.duser.username}, ${user2.duser.username}) to webhook`);
+    } catch (webhookError) {
+        console.error('Failed to report nearby users to webhook:', webhookError);
+        // Optionally report this failure to the error webhook
+        await reportErrorToWebhook(new Error(`Failed to send nearby notification webhook: ${webhookError}`)).catch(console.error);
+    }
+}
+
 // Cache interfaces and implementations
 interface CacheEntry<T> {
     data: T;
@@ -220,7 +254,9 @@ const UserSchema = z.object({
     location: LocationSchema.optional(),
     duser: DiscordUserSchema,
     privacy: PrivacySettingsSchema,
-    pushToken: z.string().optional()
+    pushToken: z.string().optional(),
+    receiveNearbyNotifications: z.boolean().optional(),
+    allowNearbyNotifications: z.boolean().optional()
 });
 
 const DiscordTokenResponseSchema = z.object({
@@ -409,16 +445,27 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
             return;
         }
 
+        // Check if user already exists to preserve settings
+        const existingUser = users[userData.id];
+
         // Create and validate new user object
         const user = UserSchema.parse({
             id: userData.id,
             duser: userData,
-            privacy: users[userData.id]?.privacy || {
+            privacy: existingUser?.privacy || {
                 enabledGuilds: [],
                 blockedUsers: []
             },
-            location: users[userData.id]?.location,
+            location: existingUser?.location,
+            pushToken: existingUser?.pushToken,
+            receiveNearbyNotifications: existingUser?.receiveNearbyNotifications ?? true,
+            allowNearbyNotifications: existingUser?.allowNearbyNotifications ?? true
         });
+
+        // Ensure desiredAccuracy defaults to 0 if location exists but desiredAccuracy doesn't
+        if (user.location && user.location.desiredAccuracy === undefined) {
+            user.location.desiredAccuracy = 0;
+        }
 
         // Store the user and token mapping
         users[userData.id] = user;
@@ -442,7 +489,7 @@ function roundCoordinates(location: Location): Location {
     }
 
     // Default to 3km (3000 meters) if desiredAccuracy isn't specified
-    const desiredAccuracy = location.desiredAccuracy || 3000;
+    const desiredAccuracy = location.desiredAccuracy ?? 3000;
 
     // If desired accuracy is 0 or negative, return original location
     if (desiredAccuracy <= 0) {
@@ -527,27 +574,35 @@ app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): P
     });
 
     try {
-        const { username, guild, location, privacy, pushToken } = req.body;
+        const { username, guild, location, privacy, pushToken,
+            receiveNearbyNotifications, allowNearbyNotifications } = req.body;
 
-        // Ensure location has desiredAccuracy for migration
-        const processedLocation = location ? {
-            ...location,
-            desiredAccuracy: location.desiredAccuracy ?? 0
-        } : undefined;
+        // Process location, ensuring desiredAccuracy defaults to 0
+        let processedLocation: Location | undefined = undefined;
+        if (location) {
+            processedLocation = LocationSchema.parse({
+                ...location,
+                desiredAccuracy: location.desiredAccuracy ?? 0 // Default to 0 if not provided in request
+            });
+        }
 
         // Update user data
         const updatedUser = UserSchema.parse({
             id: currentUser.id,
             duser: currentUser.duser,
             privacy: privacy,
-            location: processedLocation ? roundCoordinates(processedLocation) : undefined,
-            pushToken: pushToken || currentUser.pushToken // Preserve existing push token if not provided
+            location: processedLocation ? roundCoordinates(processedLocation) : currentUser.location,
+            pushToken: pushToken || currentUser.pushToken,
+            receiveNearbyNotifications: receiveNearbyNotifications ?? currentUser.receiveNearbyNotifications ?? true,
+            allowNearbyNotifications: allowNearbyNotifications ?? currentUser.allowNearbyNotifications ?? true
         });
 
         console.log('POST /users/me: Validated and processed user data:', {
             userId: updatedUser.id,
             location: updatedUser.location,
-            pushToken: updatedUser.pushToken
+            pushToken: updatedUser.pushToken,
+            receiveNearbyNotifications: updatedUser.receiveNearbyNotifications,
+            allowNearbyNotifications: updatedUser.allowNearbyNotifications
         });
 
         // Ensure the user can only update their own data
@@ -818,6 +873,8 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 // Function to check for nearby users and send notifications
 async function checkNearbyUsers() {
+    console.log('DEBUG: Running checkNearbyUsers'); // Log start
+
     if (!apnProvider) {
         console.error('Push notification service not configured');
         return;
@@ -827,7 +884,10 @@ async function checkNearbyUsers() {
     const now = Date.now();
     const ONE_DAY = 24 * 60 * 60 * 1000;
 
+    console.log(`DEBUG: Found ${usersWithLocation.length} users with location and push token.`); // Log count
+
     // Clean up old notifications
+    const initialNotifCount = cache.recentNotifications.length;
     cache.recentNotifications = cache.recentNotifications.filter(notif =>
         now - notif.timestamp < ONE_DAY
     );
@@ -837,9 +897,12 @@ async function checkNearbyUsers() {
             const user1 = usersWithLocation[i];
             const user2 = usersWithLocation[j];
 
+            console.log(`DEBUG: Checking pair: ${user1.duser.username}(${user1.id}) and ${user2.duser.username}(${user2.id})`); // Log pair
+
             // Skip if either user has blocked the other
             if (user1.privacy.blockedUsers.includes(user2.id) ||
                 user2.privacy.blockedUsers.includes(user1.id)) {
+                console.log(`DEBUG: Skipping pair - blocked.`); // Log block
                 continue;
             }
 
@@ -847,64 +910,95 @@ async function checkNearbyUsers() {
             const sharedGuilds = user1.privacy.enabledGuilds.filter(guild =>
                 user2.privacy.enabledGuilds.includes(guild)
             );
-            if (sharedGuilds.length === 0) continue;
+            if (sharedGuilds.length === 0) {
+                console.log(`DEBUG: Skipping pair - no shared guilds.`); // Log no shared guilds
+                continue;
+            }
+            console.log(`DEBUG: Shared guilds found: ${sharedGuilds.join(', ')}`); // Log shared guilds
 
             // Check if we've notified this pair recently
+            const recentNotifKey = [user1.id, user2.id].sort().join('-'); // Consistent key
             const hasRecentNotification = cache.recentNotifications.some(notif =>
-                (notif.user1Id === user1.id && notif.user2Id === user2.id) ||
-                (notif.user1Id === user2.id && notif.user2Id === user1.id)
+            ((notif.user1Id === user1.id && notif.user2Id === user2.id) ||
+                (notif.user1Id === user2.id && notif.user2Id === user1.id))
             );
-            if (hasRecentNotification) continue;
+            if (hasRecentNotification) {
+                console.log(`DEBUG: Skipping pair - recent notification exists.`); // Log recent notification
+                continue;
+            }
 
             const distance = calculateDistance(
                 user1.location!.latitude,
                 user1.location!.longitude,
-                user2.location!.longitude,
+                user2.location!.latitude, // Corrected: Use latitude for user2
                 user2.location!.longitude
             );
+            console.log(`DEBUG: Calculated distance: ${distance}m`); // Log distance
 
             if (distance <= 500) {
-                // Send notification to user1
-                try {
-                    const notification1 = new apn.Notification();
-                    notification1.alert = {
-                        title: 'Nearby User!',
-                        body: `${user2.duser.username} is ${distance}m away! Text them to meet up!`
-                    };
-                    notification1.sound = 'default';
-                    notification1.topic = APNS_BUNDLE_ID;
-                    await apnProvider.send(notification1, user1.pushToken as string);
-                } catch (error) {
-                    console.error(`Failed to send notification to ${user1.id}:`, error);
+                console.log(`DEBUG: Distance <= 500m - Potential notification.`); // Log distance threshold met
+                // Report to webhook - ADDED
+                reportNearbyUsersToWebhook(user1, user2, distance).catch(console.error);
+
+                // Send notification to user1 about user2
+                const canNotifyUser1 = (user1.receiveNearbyNotifications ?? true) && (user2.allowNearbyNotifications ?? true);
+                console.log(`DEBUG: Can notify ${user1.duser.username} about ${user2.duser.username}? ${canNotifyUser1} (receive: ${user1.receiveNearbyNotifications ?? true}, allow: ${user2.allowNearbyNotifications ?? true})`); // Log notification decision factors
+                if (canNotifyUser1) {
+                    try {
+                        const notification1 = new apn.Notification();
+                        notification1.alert = {
+                            title: 'Nearby User!',
+                            body: `${user2.duser.username} is ~${Math.round(distance)}m away! Text them to meet up!`
+                        };
+                        notification1.sound = 'default';
+                        notification1.topic = APNS_BUNDLE_ID;
+                        await apnProvider.send(notification1, user1.pushToken as string);
+                        console.log(`Sent nearby notification to ${user1.duser.username} about ${user2.duser.username}`);
+                    } catch (error) {
+                        console.error(`Failed to send notification to ${user1.id}:`, error);
+                    }
+                } else {
+                    console.log(`Nearby check: Skipped notification to ${user1.duser.username} about ${user2.duser.username} due to settings.`);
                 }
 
-                // Send notification to user2
-                try {
-                    const notification2 = new apn.Notification();
-                    notification2.alert = {
-                        title: 'Nearby User!',
-                        body: `${user1.duser.username} is ${distance}m away! Text them to meet up!`
-                    };
-                    notification2.sound = 'default';
-                    notification2.topic = APNS_BUNDLE_ID;
-                    await apnProvider.send(notification2, user2.pushToken as string);
-                } catch (error) {
-                    console.error(`Failed to send notification to ${user2.id}:`, error);
+                // Send notification to user2 about user1
+                const canNotifyUser2 = (user2.receiveNearbyNotifications ?? true) && (user1.allowNearbyNotifications ?? true);
+                console.log(`DEBUG: Can notify ${user2.duser.username} about ${user1.duser.username}? ${canNotifyUser2} (receive: ${user2.receiveNearbyNotifications ?? true}, allow: ${user1.allowNearbyNotifications ?? true})`); // Log notification decision factors
+                if (canNotifyUser2) {
+                    try {
+                        const notification2 = new apn.Notification();
+                        notification2.alert = {
+                            title: 'Nearby User!',
+                            body: `${user1.duser.username} is ~${Math.round(distance)}m away! Text them to meet up!`
+                        };
+                        notification2.sound = 'default';
+                        notification2.topic = APNS_BUNDLE_ID;
+                        await apnProvider.send(notification2, user2.pushToken as string);
+                        console.log(`Sent nearby notification to ${user2.duser.username} about ${user1.duser.username}`);
+                    } catch (error) {
+                        console.error(`Failed to send notification to ${user2.id}:`, error);
+                    }
+                } else {
+                    console.log(`Nearby check: Skipped notification to ${user2.duser.username} about ${user1.duser.username} due to settings.`);
                 }
 
-                // Record the notification
-                cache.recentNotifications.push({
-                    user1Id: user1.id,
-                    user2Id: user2.id,
-                    timestamp: now
-                });
+                // Record the notification interaction if *either* notification could have been sent
+                const shouldRecordInteraction = canNotifyUser1 || canNotifyUser2;
+                console.log(`DEBUG: Should record interaction? ${shouldRecordInteraction}`); // Log interaction recording decision
+                if (shouldRecordInteraction) {
+                    cache.recentNotifications.push({
+                        user1Id: user1.id,
+                        user2Id: user2.id,
+                        timestamp: now
+                    });
+                }
             }
         }
     }
 }
 
 // Set up periodic check for nearby users
-setInterval(checkNearbyUsers, 60000); // Check every minute
+setInterval(checkNearbyUsers, 6000); // Check every 6s (for now)
 
 // Start the server
 const server = app.listen(port, () => {
@@ -1017,6 +1111,12 @@ function saveDataToDisk() {
 // round before this. a statistical attack just finds the grid-cell-center.
 //
 // This solves the problem when map is zoomed in, when zoomed out we 
+
+function jiggleUsers(users: User[]): User[] {
+    return users;
+}
+
+/*
 function jiggleUsers(users: User[]): User[] {
     // console.log('jiggleUsers: Starting with', users.length, 'users');
 
@@ -1068,3 +1168,5 @@ function jiggleUsers(users: User[]): User[] {
     // console.log('jiggleUsers: Returning', result.length, 'users');
     return result;
 }
+
+*/

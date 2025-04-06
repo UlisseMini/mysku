@@ -61,6 +61,8 @@ struct User: Codable, Identifiable {
     let duser: DiscordUser
     let privacy: PrivacySettings
     let pushToken: String?
+    let receiveNearbyNotifications: Bool?
+    let allowNearbyNotifications: Bool?
 }
 
 struct Guild: Codable, Identifiable {
@@ -260,7 +262,9 @@ class APIManager: ObservableObject {
             location: user.location,
             duser: user.duser,
             privacy: user.privacy,
-            pushToken: getPushToken()
+            pushToken: getPushToken(),
+            receiveNearbyNotifications: user.receiveNearbyNotifications,
+            allowNearbyNotifications: user.allowNearbyNotifications
         )
         
         let _: [String: Bool] = try await makeRequest(
@@ -281,7 +285,9 @@ class APIManager: ObservableObject {
             location: location,
             duser: currentUser.duser,
             privacy: currentUser.privacy,
-            pushToken: getPushToken()
+            pushToken: getPushToken(),
+            receiveNearbyNotifications: currentUser.receiveNearbyNotifications,
+            allowNearbyNotifications: currentUser.allowNearbyNotifications
         )
         
         try await updateCurrentUser(updatedUser)

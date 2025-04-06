@@ -299,6 +299,8 @@ private struct SettingsListContent: View {
     @Binding var userSearchText: String
     @Binding var privacyRadius: Double
     @Binding var showingDeleteConfirmation: Bool
+    @Binding var receiveNearbyNotifications: Bool
+    @Binding var allowNearbyNotifications: Bool
     let refreshIntervals: [TimeInterval: String]
     let saveUserSettings: () -> Void
     let deleteUserDataAndLogout: () -> Void
@@ -385,6 +387,22 @@ private struct SettingsListContent: View {
                 }
             }
             
+            // Notifications Section - NEW -> UPDATED
+            Section {
+                Toggle("Notify me when I'm near someone", isOn: $receiveNearbyNotifications)
+                    .onChange(of: receiveNearbyNotifications) { _ in saveUserSettings() }
+                Toggle("Notify others when they are near me", isOn: $allowNearbyNotifications)
+                    .onChange(of: allowNearbyNotifications) { _ in saveUserSettings() }
+            } header: {
+                Text("NEARBY NOTIFICATIONS")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.gray)
+                    .textCase(nil)
+            } footer: {
+                Text("Receive a push notification when another user you share a server with is nearby (within ~500m).")
+            }
+
             // Account Actions Section
             AccountActionsView(
                 authManager: authManager,
@@ -400,6 +418,8 @@ private struct SettingsListContent: View {
             if let user = apiManager.currentUser {
                 selectedGuilds = Set(user.privacy.enabledGuilds)
                 blockedUsers = user.privacy.blockedUsers
+                receiveNearbyNotifications = user.receiveNearbyNotifications ?? true
+                allowNearbyNotifications = user.allowNearbyNotifications ?? true
             }
         }
         .overlay {
@@ -428,6 +448,8 @@ struct SettingsView: View {
     @State private var userSearchText = ""
     @State private var privacyRadius: Double = UserDefaults.standard.double(forKey: "privacyRadius")
     @State private var showingDeleteConfirmation = false
+    @State private var receiveNearbyNotifications: Bool = true
+    @State private var allowNearbyNotifications: Bool = true
     
     // Refresh interval options in seconds
     private let refreshIntervals = [
@@ -452,6 +474,8 @@ struct SettingsView: View {
                 userSearchText: $userSearchText,
                 privacyRadius: $privacyRadius,
                 showingDeleteConfirmation: $showingDeleteConfirmation,
+                receiveNearbyNotifications: $receiveNearbyNotifications,
+                allowNearbyNotifications: $allowNearbyNotifications,
                 refreshIntervals: refreshIntervals,
                 saveUserSettings: saveUserSettings,
                 deleteUserDataAndLogout: deleteUserDataAndLogout
@@ -473,6 +497,8 @@ struct SettingsView: View {
                     userSearchText: $userSearchText,
                     privacyRadius: $privacyRadius,
                     showingDeleteConfirmation: $showingDeleteConfirmation,
+                    receiveNearbyNotifications: $receiveNearbyNotifications,
+                    allowNearbyNotifications: $allowNearbyNotifications,
                     refreshIntervals: refreshIntervals,
                     saveUserSettings: saveUserSettings,
                     deleteUserDataAndLogout: deleteUserDataAndLogout
@@ -498,7 +524,9 @@ struct SettingsView: View {
                         enabledGuilds: Array(selectedGuilds),
                         blockedUsers: blockedUsers
                     ),
-                    pushToken: UserDefaults.standard.string(forKey: "push_token")
+                    pushToken: UserDefaults.standard.string(forKey: "push_token"),
+                    receiveNearbyNotifications: receiveNearbyNotifications,
+                    allowNearbyNotifications: allowNearbyNotifications
                 )
                 
                 try await apiManager.updateCurrentUser(updatedUser)
