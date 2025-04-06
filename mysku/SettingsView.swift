@@ -301,16 +301,28 @@ private struct SettingsListContent: View {
     @Binding var showingDeleteConfirmation: Bool
     @Binding var receiveNearbyNotifications: Bool
     @Binding var allowNearbyNotifications: Bool
+    @Binding var nearbyNotificationDistance: Double
+    @Binding var allowNearbyNotificationDistance: Double
     let refreshIntervals: [TimeInterval: String]
     let saveUserSettings: () -> Void
     let deleteUserDataAndLogout: () -> Void
     
-    // Distance options and their display values
-    private let distanceOptions: [(value: Double, display: String)] = [
+    // Distance options and their display values for Location Privacy
+    private let locationDistanceOptions: [(value: Double, display: String)] = [
+        (0.0, "Full Accuracy"),
+        (1000.0, "1 km"),
+        (5000.0, "5 km"),
+        (10000.0, "10 km"),
+        (100000.0, "100 km")
+    ]
+    
+    // Distance options for Nearby Notifications
+    private let notificationDistanceOptions: [(value: Double, display: String)] = [
+        (50.0, "50 meters"),
         (100.0, "100 meters"),
-        (1000.0, "1 kilometer"),
-        (10000.0, "10 kilometers"),
-        (100000.0, "100 kilometers")
+        (250.0, "250 meters"),
+        (500.0, "500 meters"),
+        (1000.0, "1 kilometer")
     ]
     
     var body: some View {
@@ -383,16 +395,40 @@ private struct SettingsListContent: View {
                     .textCase(nil)
             } footer: {
                 if locationManager.backgroundUpdatesEnabled {
-                    Text("Background updates allow your location to be shared even when the app is closed. This uses more battery but keeps your location current.")
+                    Text("Background updates allow your location to be shared even when the app is closed.")
                 }
             }
             
-            // Notifications Section - NEW -> UPDATED
+            // Notifications Section - UPDATED
             Section {
                 Toggle("Notify me when I'm near someone", isOn: $receiveNearbyNotifications)
                     .onChange(of: receiveNearbyNotifications) { _ in saveUserSettings() }
+                
+                // Conditional Picker for nearby notification distance
+                if receiveNearbyNotifications {
+                    Picker("Notification Distance", selection: $nearbyNotificationDistance) {
+                        ForEach(notificationDistanceOptions, id: \.value) { option in
+                            Text(option.display).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .onChange(of: nearbyNotificationDistance) { _ in saveUserSettings() }
+                }
+                
                 Toggle("Notify others when they are near me", isOn: $allowNearbyNotifications)
                     .onChange(of: allowNearbyNotifications) { _ in saveUserSettings() }
+
+                // Conditional Picker for allowing nearby notification distance
+                if allowNearbyNotifications {
+                    Picker("Notify Others Within", selection: $allowNearbyNotificationDistance) {
+                        ForEach(notificationDistanceOptions, id: \.value) { option in
+                            Text(option.display).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .onChange(of: allowNearbyNotificationDistance) { _ in saveUserSettings() }
+                }
+
             } header: {
                 Text("NEARBY NOTIFICATIONS")
                     .font(.subheadline)
@@ -400,7 +436,7 @@ private struct SettingsListContent: View {
                     .foregroundColor(.gray)
                     .textCase(nil)
             } footer: {
-                Text("Receive a push notification when another user you share a server with is nearby (within ~500m).")
+                Text("Receive a push notification when another user you share a server with is nearby. Define the distance for receiving notifications and for allowing others to be notified about you.")
             }
 
             // Account Actions Section
@@ -420,6 +456,9 @@ private struct SettingsListContent: View {
                 blockedUsers = user.privacy.blockedUsers
                 receiveNearbyNotifications = user.receiveNearbyNotifications ?? true
                 allowNearbyNotifications = user.allowNearbyNotifications ?? true
+                // Load distance values, using 500m as default if nil
+                nearbyNotificationDistance = user.nearbyNotificationDistance ?? 500.0
+                allowNearbyNotificationDistance = user.allowNearbyNotificationDistance ?? 500.0
             }
         }
         .overlay {
@@ -450,6 +489,8 @@ struct SettingsView: View {
     @State private var showingDeleteConfirmation = false
     @State private var receiveNearbyNotifications: Bool = true
     @State private var allowNearbyNotifications: Bool = true
+    @State private var nearbyNotificationDistance: Double = 500.0
+    @State private var allowNearbyNotificationDistance: Double = 500.0
     
     // Refresh interval options in seconds
     private let refreshIntervals = [
@@ -476,6 +517,8 @@ struct SettingsView: View {
                 showingDeleteConfirmation: $showingDeleteConfirmation,
                 receiveNearbyNotifications: $receiveNearbyNotifications,
                 allowNearbyNotifications: $allowNearbyNotifications,
+                nearbyNotificationDistance: $nearbyNotificationDistance,
+                allowNearbyNotificationDistance: $allowNearbyNotificationDistance,
                 refreshIntervals: refreshIntervals,
                 saveUserSettings: saveUserSettings,
                 deleteUserDataAndLogout: deleteUserDataAndLogout
@@ -499,6 +542,8 @@ struct SettingsView: View {
                     showingDeleteConfirmation: $showingDeleteConfirmation,
                     receiveNearbyNotifications: $receiveNearbyNotifications,
                     allowNearbyNotifications: $allowNearbyNotifications,
+                    nearbyNotificationDistance: $nearbyNotificationDistance,
+                    allowNearbyNotificationDistance: $allowNearbyNotificationDistance,
                     refreshIntervals: refreshIntervals,
                     saveUserSettings: saveUserSettings,
                     deleteUserDataAndLogout: deleteUserDataAndLogout
@@ -526,7 +571,9 @@ struct SettingsView: View {
                     ),
                     pushToken: UserDefaults.standard.string(forKey: "push_token"),
                     receiveNearbyNotifications: receiveNearbyNotifications,
-                    allowNearbyNotifications: allowNearbyNotifications
+                    allowNearbyNotifications: allowNearbyNotifications,
+                    nearbyNotificationDistance: nearbyNotificationDistance,
+                    allowNearbyNotificationDistance: allowNearbyNotificationDistance
                 )
                 
                 try await apiManager.updateCurrentUser(updatedUser)

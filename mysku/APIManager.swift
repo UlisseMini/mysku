@@ -63,6 +63,8 @@ struct User: Codable, Identifiable {
     let pushToken: String?
     let receiveNearbyNotifications: Bool?
     let allowNearbyNotifications: Bool?
+    let nearbyNotificationDistance: Double?
+    let allowNearbyNotificationDistance: Double?
 }
 
 struct Guild: Codable, Identifiable {
@@ -264,7 +266,9 @@ class APIManager: ObservableObject {
             privacy: user.privacy,
             pushToken: getPushToken(),
             receiveNearbyNotifications: user.receiveNearbyNotifications,
-            allowNearbyNotifications: user.allowNearbyNotifications
+            allowNearbyNotifications: user.allowNearbyNotifications,
+            nearbyNotificationDistance: user.nearbyNotificationDistance,
+            allowNearbyNotificationDistance: user.allowNearbyNotificationDistance
         )
         
         let _: [String: Bool] = try await makeRequest(
@@ -287,7 +291,9 @@ class APIManager: ObservableObject {
             privacy: currentUser.privacy,
             pushToken: getPushToken(),
             receiveNearbyNotifications: currentUser.receiveNearbyNotifications,
-            allowNearbyNotifications: currentUser.allowNearbyNotifications
+            allowNearbyNotifications: currentUser.allowNearbyNotifications,
+            nearbyNotificationDistance: currentUser.nearbyNotificationDistance,
+            allowNearbyNotificationDistance: currentUser.allowNearbyNotificationDistance
         )
         
         try await updateCurrentUser(updatedUser)
