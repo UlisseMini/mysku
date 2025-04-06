@@ -341,10 +341,30 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var authorizationStatus: CLAuthorizationStatus
     @Published var showingBackgroundPrompt = false
     @Published var backgroundUpdatesEnabled: Bool = UserDefaults.standard.bool(forKey: "backgroundUpdatesEnabled") {
-        didSet {
-            UserDefaults.standard.set(backgroundUpdatesEnabled, forKey: "backgroundUpdatesEnabled")
-            configureBackgroundUpdates()
-            handleLocationSettingsChange()
+        didSet(oldValue) {
+            if backgroundUpdatesEnabled {
+                if authorizationStatus != .authorizedAlways {
+                    print("📍 LocationManager: Background updates require 'Always' permission. Requesting...")
+                    Task { @MainActor in
+                        if self.backgroundUpdatesEnabled && !oldValue {
+                            self.backgroundUpdatesEnabled = false
+                        }
+                        self.requestAlwaysAuthorization()
+                    }
+                } else {
+                    print("📍 LocationManager: Enabling background updates (permission already granted).")
+                    UserDefaults.standard.set(true, forKey: "backgroundUpdatesEnabled")
+                    configureBackgroundUpdates()
+                    handleLocationSettingsChange()
+                }
+            } else {
+                if !backgroundUpdatesEnabled && oldValue {
+                    print("📍 LocationManager: Disabling background updates.")
+                    UserDefaults.standard.set(false, forKey: "backgroundUpdatesEnabled")
+                    configureBackgroundUpdates()
+                    handleLocationSettingsChange()
+                }
+            }
         }
     }
     
