@@ -2,6 +2,8 @@
 buildServer.json
 todo
 .DS_STORE
+TestResults
+claude
 
 # From https://raw.githubusercontent.com/github/gitignore/refs/heads/main/Swift.gitignore
 # Xcode
