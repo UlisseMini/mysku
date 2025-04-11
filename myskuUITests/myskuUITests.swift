@@ -62,23 +62,29 @@ final class myskuUITests: XCTestCase {
         takeScreenshot(app: app, named: "Logged In before Settings Test")
         // --- End Precondition ---
 
-
         // Navigate to settings
         settingsButtonInitial.tap()
-        takeScreenshot(app: app, named: "Settings View Entered")
-
-        // Repeatedly swipe up to ensure scrolling past inner lists
-        for _ in 1...4 {
-            app.swipeUp(velocity: .fast)
-            if app.buttons["Logout"].exists {
-                break
-            }
-        }
-        takeScreenshot(app: app, named: "Settings View After Repeated Swipes")
-
-        // Find and tap logout (should definitely be visible now)
+        
+        // Take screenshot of the settings view when first entering
+        takeScreenshot(app: app, named: "Settings View Top")
+        
+        // Do a single long swipe to scroll down to see more sections
+        app.swipeUp()
+        takeScreenshot(app: app, named: "Settings View Middle")
+        
+        // Do another swipe to reach the bottom (hopefully showing account section)
+        app.swipeUp()
+        takeScreenshot(app: app, named: "Settings View Bottom")
+        
+        // If needed, do one more swipe to ensure we see the account section
+        app.swipeUp()
+        takeScreenshot(app: app, named: "Settings View Account Section")
+        
+        // Find the logout button
         let logoutButton = app.buttons["Logout"]
-        XCTAssertTrue(logoutButton.waitForExistence(timeout: 1.0), "Logout button not found in settings after repeated swipes")
+        XCTAssertTrue(logoutButton.waitForExistence(timeout: 1.0), "Logout button not found in settings")
+        
+        // Perform logout
         logoutButton.tap()
 
         // Assert logout was successful (e.g., login button reappears)
