@@ -6,6 +6,9 @@ struct miniworldApp: App {
     @UIApplicationDelegateAdaptor(NotificationHandler.self) var notificationHandler
     
     init() {
+        print("🏁 miniworldApp init() entered.")
+        print("Arguments received: \(ProcessInfo.processInfo.arguments)")
+        
         // Check if running UI tests
         if ProcessInfo.processInfo.arguments.contains("-UITests") {
             print("🧪 Running in UI Test mode")
@@ -22,11 +25,11 @@ struct miniworldApp: App {
         print("🔔 miniworldApp: Requesting notification authorization...")
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if let error = error {
-                print("🔔 miniworldApp: Failed to request notification authorization:", error)
+                print("🔔 miniworldApp: Failed to request notification authorization: \(error.localizedDescription)")
                 return
             }
             
-            print("🔔 miniworldApp: Notification authorization granted:", granted)
+            print("🔔 miniworldApp: Notification authorization granted: \(granted)")
             if granted {
                 DispatchQueue.main.async {
                     print("🔔 miniworldApp: Registering for remote notifications...")
@@ -41,11 +44,31 @@ struct miniworldApp: App {
     }
     
     private func setupForUITests() {
-        // Reset user defaults if needed
-        if ProcessInfo.processInfo.arguments.contains("-ResetUserDefaults") {
-            print("🧪 Resetting UserDefaults for testing")
+        // Check for the full reset flag
+        if ProcessInfo.processInfo.arguments.contains("-ResetState") {
+            print("🧪 Resetting application state for UI Tests...")
+            
+            // 1. Clear UserDefaults
             let domain = Bundle.main.bundleIdentifier!
             UserDefaults.standard.removePersistentDomain(forName: domain)
+            print("  -> UserDefaults cleared.")
+            
+            // 2. Perform Logout (Add other state clearing as needed)
+            AuthManager.shared.logout() 
+            print("  -> AuthManager logout called.")
+            
+            // 3. Clear Keychain data if necessary
+            // KeychainManager.shared.clearSensitiveData()
+            // print("  -> Keychain cleared (if implemented).")
+
+            // 4. Clear database data if necessary
+            // DatabaseManager.shared.deleteAllData()
+            // print("  -> Database cleared (if implemented).")
+
+            UserDefaults.standard.synchronize()
+            print("🧪 Application state reset complete.")
+        } else {
+            print("🧪 UI Test mode active, but '-ResetState' argument NOT found.")
         }
     }
     

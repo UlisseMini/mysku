@@ -9,49 +9,73 @@ import XCTest
 
 final class myskuUITests: XCTestCase {
     
+    // Declare app as an instance variable
+    var app: XCUIApplication!
+    
     override func setUpWithError() throws {
         // Allow screenshots to be taken even when tests fail
         continueAfterFailure = false
         
-        // Reset app state for clean launch
-        let app = XCUIApplication()
-        app.launchArguments = ["-UITests", "-ResetUserDefaults"]
+        // Initialize and configure the instance variable 'app'
+        app = XCUIApplication()
+        app.launchArguments = ["-UITests", "-ResetState"]
         app.launchEnvironment = ["UITests": "true"]
+        // Note: app.launch() is NOT called here, but in each test.
     }
     
     override func tearDownWithError() throws {
         // Cleanup after test
     }
     
-    // MARK: - Main Test Flow
+    // MARK: - Test Flows (Example Refactor)
     
     @MainActor
-    func testFullAppFlow() throws {
-        let app = XCUIApplication()
+    func testDemoLogin() throws {
+        // Launch the app. Due to setUpWithError, it will launch with "-ResetState".
+        // Your app's code should handle this argument to ensure a logged-out state.
         app.launch()
-        
-        // Take screenshot of initial launch screen
-        takeScreenshot(app: app, named: "Initial Launch Screen")
 
-        // Logout if needed
-        logoutIfNeeded(app: app)
-        
-        // Take screenshot of (what should be) the login screen
-        takeScreenshot(app: app, named: "Login screen")
-        
-        // Login using demo mode
+        takeScreenshot(app: app, named: "Launch Screen before Login")
+
+        // Perform login
         loginWithDemoMode(app: app)
-        
-        // Take screenshot after demo mode activation
-        takeScreenshot(app: app, named: "Map view")
-        
-        // Find and click settings button
-        let settingsButton = app.buttons["Settings"]
-        XCTAssertTrue(settingsButton.waitForExistence(timeout: 2.0), "Settings button not found")
-        settingsButton.tap()
-        
-        // Take screenshot after clicking settings
+
+        // Assert successful login (e.g., map view appears)
+        // Replace "MapViewIdentifier" with the actual accessibility identifier of your map view
+        let mapView = app.otherElements["MapViewIdentifier"]
+        XCTAssertTrue(mapView.waitForExistence(timeout: 5.0), "Map view did not appear after login")
+        takeScreenshot(app: app, named: "Map View after Login")
+    }
+    
+    @MainActor
+    func testSettingsNavigationAndLogout() throws {
+        // Launch the app - ensures clean state (logged out)
+        app.launch()
+
+        // --- Precondition: Log in first ---
+        // Since the app starts logged out, we need to log in for THIS test.
+        loginWithDemoMode(app: app)
+
+        // Wait for settings button to confirm login state
+        let settingsButtonInitial = app.buttons["Settings"]
+        XCTAssertTrue(settingsButtonInitial.waitForExistence(timeout: 5.0), "Settings button didn't appear after login precondition")
+        takeScreenshot(app: app, named: "Logged In before Settings Test")
+        // --- End Precondition ---
+
+
+        // Navigate to settings
+        settingsButtonInitial.tap()
         takeScreenshot(app: app, named: "Settings View")
+
+        // Find and tap logout (assuming it's visible now)
+        let logoutButton = app.buttons["Logout"]
+        XCTAssertTrue(logoutButton.waitForExistence(timeout: 2.0), "Logout button not found in settings")
+        logoutButton.tap()
+
+        // Assert logout was successful (e.g., login button reappears)
+        let loginButton = app.buttons["Continue with Discord"]
+        XCTAssertTrue(loginButton.waitForExistence(timeout: 5.0), "Login button did not reappear after logout")
+        takeScreenshot(app: app, named: "Login Screen after Logout")
     }
     
     // MARK: - Helper Functions
@@ -59,11 +83,10 @@ final class myskuUITests: XCTestCase {
     private func loginWithDemoMode(app: XCUIApplication) {
         // Find login button
         let loginButton = app.buttons["Continue with Discord"]
-        if !loginButton.waitForExistence(timeout: 2.0) {
-            // Take screenshot before failing
+        if !loginButton.waitForExistence(timeout: 5.0) { // Increased timeout slightly for robustness
             takeScreenshot(app: app, named: "Login Button Not Found")
             XCTFail("Login button not found")
-            return
+            return // Added return
         }
         
         // Long press to activate demo mode
@@ -72,39 +95,15 @@ final class myskuUITests: XCTestCase {
         // Click Yes on the alert
         let alert = app.alerts["Continue in demo mode?"]
         if !alert.waitForExistence(timeout: 2.0) {
-            // Take screenshot before failing
             takeScreenshot(app: app, named: "Demo Mode Alert Not Found")
             XCTFail("Demo mode alert not shown")
-            return
+            return // Added return
         }
         
         alert.buttons["Yes"].tap()
         
-        // Wait for UI to update after demo mode activation
-        XCTAssertTrue(app.waitForExistence(timeout: 1.0), "UI did not update after demo mode activation")
-    }
-    
-    private func logoutIfNeeded(app: XCUIApplication) {
-        // Look for settings button
-        let settingsButton = app.buttons["Settings"]
-        if settingsButton.waitForExistence(timeout: 2.0) {
-            settingsButton.tap()
-            
-            // Look for logout button at the bottom
-            let logoutButton = app.buttons["Logout"]
-            if logoutButton.waitForExistence(timeout: 2.0) {
-                logoutButton.tap()
-            } else {
-                // If logout button not found, try scrolling to bottom
-                let scrollView = app.scrollViews.firstMatch
-                if scrollView.exists {
-                    scrollView.swipeUp(velocity: .fast)
-                    if logoutButton.waitForExistence(timeout: 2.0) {
-                        logoutButton.tap()
-                    }
-                }
-            }
-        }
+        // Wait for UI to update after demo mode activation (e.g., wait for Settings button)
+        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 5.0), "Settings button did not appear after demo mode activation")
     }
     
     private func takeScreenshot(app: XCUIApplication, named name: String) {
