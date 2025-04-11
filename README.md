@@ -21,3 +21,4 @@ xcodebuild test -scheme mysku -destination "platform=iOS,id=00008101-001434D4008
 ```
 
 To run automated tests.
+
