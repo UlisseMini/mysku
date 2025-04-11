@@ -2,26 +2,25 @@
 
 This PR adds screenshots of the current UI state and implements various UI improvements across the app.
 
-<details>
-<summary>Click to view screenshots</summary>
+## Screenshots
 
 ### Launch and Authentication Flow
-<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Launch_Screen_before_Login.png" width="300" alt="Launch Screen"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Login_Screen_after_Logout.png" width="300" alt="Login Screen"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Map_View_after_Login.png" width="300" alt="Map View">
+![Launch Screen](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Launch_Screen_before_Login.png)
+![Login Screen](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Login_Screen_after_Logout.png)
+![Map View](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Map_View_after_Login.png)
 
-### Settings Views
-<details>
-<summary>Settings Sections</summary>
+### Settings Sections
+![Settings Top](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Top.png)
+![Settings Middle](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Middle.png)
+![Settings Bottom](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Bottom.png)
 
-#### Top, Middle, Bottom
-<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Top.png" width="250" alt="Settings Top"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Middle.png" width="250" alt="Settings Middle"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Bottom.png" width="250" alt="Settings Bottom">
+### Feature Sections
+![Account Section](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Account_Section.png)
+![Notifications](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Notifications.png)
+![Location Settings](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Location_1.png)
 
-#### Feature Sections
-<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Account_Section.png" width="250" alt="Account Section"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Notifications.png" width="250" alt="Notifications"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Location_1.png" width="250" alt="Location 1">
-
-#### Final View
-<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Final.png" width="300" alt="Final Settings">
-</details>
-</details>
+### Final View
+![Final Settings](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Final.png)
 
 ## UI Changes Implemented
 
