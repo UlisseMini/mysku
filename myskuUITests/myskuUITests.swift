@@ -20,7 +20,6 @@ final class myskuUITests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-UITests", "-ResetState"]
         app.launchEnvironment = ["UITests": "true"]
-        // Note: app.launch() is NOT called here, but in each test.
     }
     
     override func tearDownWithError() throws {
@@ -41,9 +40,10 @@ final class myskuUITests: XCTestCase {
         loginWithDemoMode(app: app)
 
         // Assert successful login (e.g., map view appears)
-        // Replace "MapViewIdentifier" with the actual accessibility identifier of your map view
-        let mapView = app.otherElements["MapViewIdentifier"]
-        XCTAssertTrue(mapView.waitForExistence(timeout: 5.0), "Map view did not appear after login")
+        // Check if the Map tab button exists and is selected
+        let mapTabButton = app.buttons["Map"] // Tab bar buttons are often identified by their label
+        XCTAssertTrue(mapTabButton.waitForExistence(timeout: 5.0), "Map tab button did not appear after login")
+        XCTAssertTrue(mapTabButton.isSelected, "Map tab was not selected after login")
         takeScreenshot(app: app, named: "Map View after Login")
     }
     
@@ -65,11 +65,20 @@ final class myskuUITests: XCTestCase {
 
         // Navigate to settings
         settingsButtonInitial.tap()
-        takeScreenshot(app: app, named: "Settings View")
+        takeScreenshot(app: app, named: "Settings View Entered")
 
-        // Find and tap logout (assuming it's visible now)
+        // Repeatedly swipe up to ensure scrolling past inner lists
+        for _ in 1...4 {
+            app.swipeUp(velocity: .fast)
+            if app.buttons["Logout"].exists {
+                break
+            }
+        }
+        takeScreenshot(app: app, named: "Settings View After Repeated Swipes")
+
+        // Find and tap logout (should definitely be visible now)
         let logoutButton = app.buttons["Logout"]
-        XCTAssertTrue(logoutButton.waitForExistence(timeout: 2.0), "Logout button not found in settings")
+        XCTAssertTrue(logoutButton.waitForExistence(timeout: 1.0), "Logout button not found in settings after repeated swipes")
         logoutButton.tap()
 
         // Assert logout was successful (e.g., login button reappears)
