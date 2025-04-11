@@ -233,22 +233,34 @@ struct ServerRow: View {
     let onToggle: (Bool) -> Void
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             AsyncImage(url: guild.iconURL) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 36, height: 36)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 40, height: 40)
                     .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(AppTheme.secondaryColor, lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
             } placeholder: {
                 Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 36, height: 36)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Image(systemName: "server.rack")
+                            .foregroundColor(Color.gray.opacity(0.5))
+                    )
             }
             
             Text(guild.name)
+                .font(.body)
+                .fontWeight(isEnabled ? .medium : .regular)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .foregroundColor(isEnabled ? AppTheme.textPrimary : AppTheme.textSecondary)
             
             Spacer()
             
@@ -256,9 +268,12 @@ struct ServerRow: View {
                 get: { isEnabled },
                 set: { onToggle($0) }
             ))
-            .tint(.accentColor)
+            .tint(AppTheme.primaryColor)
+            .scaleEffect(0.9)
         }
-        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .contentShape(Rectangle())
     }
 }
 
@@ -320,29 +335,43 @@ struct UserRow: View {
     let onToggleBlock: () -> Void
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             AsyncImage(url: user.duser.avatarURL) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 36, height: 36)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 40, height: 40)
                     .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(AppTheme.secondaryColor, lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
             } placeholder: {
                 Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 36, height: 36)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(Color.gray.opacity(0.5))
+                    )
             }
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(user.duser.username)
-                    .fontWeight(isCurrentUser ? .medium : .regular)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.body)
+                    .fontWeight(isCurrentUser ? .semibold : .regular)
+                    .lineLimit(1)
+                    .foregroundColor(isBlocked ? AppTheme.textSecondary : AppTheme.textPrimary)
                 
                 if isCurrentUser {
                     Text("You")
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppTheme.primaryColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(AppTheme.primaryColor.opacity(0.1))
+                        .cornerRadius(4)
                 }
             }
             
@@ -351,17 +380,26 @@ struct UserRow: View {
             if !isCurrentUser {
                 Button(action: onToggleBlock) {
                     Text(isBlocked ? "Unblock" : "Block")
-                        .font(.subheadline)
-                        .foregroundColor(isBlocked ? .blue : .red)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(isBlocked ? AppTheme.primaryColor : AppTheme.destructiveColor)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(isBlocked ? AppTheme.primaryColor.opacity(0.1) : AppTheme.destructiveColor.opacity(0.1))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(isBlocked ? AppTheme.primaryColor.opacity(0.2) : AppTheme.destructiveColor.opacity(0.2), lineWidth: 1)
+                        )
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .opacity(isCurrentUser ? 0.8 : (isBlocked ? 0.6 : 1.0))
+        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .contentShape(Rectangle())
+        .opacity(isCurrentUser ? 1.0 : (isBlocked ? 0.7 : 1.0))
+        .animation(.easeOut(duration: 0.2), value: isBlocked)
     }
 }
 
@@ -372,20 +410,39 @@ private struct LocationSettingsView: View {
     var body: some View {
         Section {
             VStack(spacing: 16) {
-                Toggle("Background Updates", isOn: $locationManager.backgroundUpdatesEnabled)
-                    .customToggleStyle()
+                HStack(spacing: 16) {
+                    Image(systemName: "location.circle.fill")
+                        .foregroundColor(AppTheme.primaryColor)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(AppTheme.primaryColor.opacity(0.1))
+                                .frame(width: 36, height: 36)
+                        )
+                    
+                    Toggle("Background Updates", isOn: $locationManager.backgroundUpdatesEnabled)
+                        .tint(AppTheme.primaryColor)
+                }
+                .padding(.vertical, 4)
                 
                 if locationManager.backgroundUpdatesEnabled {
                     Divider()
+                        .padding(.horizontal, 8)
                     
                     VStack(spacing: 16) {
                         Button(action: {}) {
                             HStack {
                                 Image(systemName: "clock")
                                     .foregroundColor(AppTheme.primaryColor)
-                                    .frame(width: 24, height: 24)
+                                    .frame(width: 32, height: 32)
+                                    .background(
+                                        Circle()
+                                            .fill(AppTheme.primaryColor.opacity(0.1))
+                                            .frame(width: 36, height: 36)
+                                    )
                                 
                                 Text("Update Interval")
+                                    .font(.body)
                                 
                                 Spacer()
                                 
@@ -399,6 +456,7 @@ private struct LocationSettingsView: View {
                                 }
                                 .pickerStyle(.menu)
                                 .labelsHidden()
+                                .accentColor(AppTheme.primaryColor)
                             }
                             .withPickerRow(value: getIntervalText(locationManager.updateInterval))
                         }
@@ -408,9 +466,15 @@ private struct LocationSettingsView: View {
                             HStack {
                                 Image(systemName: "arrow.up.and.down")
                                     .foregroundColor(AppTheme.primaryColor)
-                                    .frame(width: 24, height: 24)
+                                    .frame(width: 32, height: 32)
+                                    .background(
+                                        Circle()
+                                            .fill(AppTheme.primaryColor.opacity(0.1))
+                                            .frame(width: 36, height: 36)
+                                    )
                                 
                                 Text("Minimum Movement")
+                                    .font(.body)
                                 
                                 Spacer()
                                 
@@ -423,22 +487,31 @@ private struct LocationSettingsView: View {
                                 }
                                 .pickerStyle(.menu)
                                 .labelsHidden()
+                                .accentColor(AppTheme.primaryColor)
                             }
                             .withPickerRow(value: getDistanceText(locationManager.minimumMovementThreshold))
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
+                    .padding(.vertical, 4)
                 }
                 
                 Divider()
+                    .padding(.horizontal, 8)
                 
                 Button(action: {}) {
                     HStack {
                         Image(systemName: "eye.slash")
                             .foregroundColor(AppTheme.primaryColor)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle()
+                                    .fill(AppTheme.primaryColor.opacity(0.1))
+                                    .frame(width: 36, height: 36)
+                            )
                         
                         Text("Location Privacy")
+                            .font(.body)
                         
                         Spacer()
                         
@@ -451,10 +524,12 @@ private struct LocationSettingsView: View {
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
+                        .accentColor(AppTheme.primaryColor)
                     }
                     .withPickerRow(value: getAccuracyText(locationManager.desiredAccuracy))
                 }
                 .buttonStyle(PlainButtonStyle())
+                .padding(.vertical, 4)
             }
             .padding(.vertical, 8)
         } header: {
@@ -504,44 +579,48 @@ private struct AccountActionsView: View {
     
     var body: some View {
         Section {
-            VStack(spacing: 16) {
-                Button {
+            VStack(spacing: 20) {
+                // Simple logout button with enhanced accessibility
+                Button("Logout") {
                     authManager.logout()
-                } label: {
-                    HStack {
-                        Image(systemName: "arrow.right.on.rectangle")
-                            .font(.system(size: 18))
-                        Text("Logout")
-                            .fontWeight(.medium)
-                    }
                 }
-                .accessibilityIdentifier("Logout")
-                .buttonStyle(AppTheme.DestructiveButtonStyle())
-                .padding(.top, 8)
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.red)
+                .cornerRadius(8)
+                .padding(.horizontal)
+                .accessibility(identifier: "Logout")
+                .accessibilityLabel("Logout")
                 
-                Button {
+                // Delete data button
+                Button(action: {
                     showingDeleteConfirmation = true
-                } label: {
+                }) {
                     HStack {
                         Image(systemName: "trash")
-                            .font(.system(size: 18))
                         Text("Delete My Data")
-                            .fontWeight(.medium)
                     }
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.red, lineWidth: 1)
+                    )
                 }
-                .accessibilityIdentifier("DeleteMyData")
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(AppTheme.destructiveColor, lineWidth: 1)
-                )
-                .foregroundColor(AppTheme.destructiveColor)
-                .padding(.bottom, 8)
+                .padding(.horizontal)
             }
+            .padding(.vertical)
         } header: {
-            Text("ACCOUNT")
-                .sectionHeader()
+            HStack {
+                Image(systemName: "person.fill")
+                    .foregroundColor(.blue)
+                Text("ACCOUNT")
+                    .font(.headline)
+                    .foregroundColor(.blue)
+            }
         }
     }
 }
@@ -653,14 +732,15 @@ private struct SettingsListContent: View {
                     searchText: $guildSearchText
                 )
             } header: {
-                Text("DISCORD SERVERS")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.blue)
-                    .textCase(nil)
-                    .padding(.bottom, 4)
+                HStack {
+                    Image(systemName: "rectangle.stack.badge.person.crop")
+                        .foregroundColor(AppTheme.primaryColor)
+                        .font(.footnote)
+                    Text("DISCORD SERVERS")
+                        .sectionHeader()
+                }
             }
-            .padding(.bottom, 20)
+            .listSectionSpacing(.compact)
             
             // Users Section
             Section {
@@ -679,13 +759,15 @@ private struct SettingsListContent: View {
                     searchText: $userSearchText
                 )
             } header: {
-                Text("USERS")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.blue)
-                    .textCase(nil)
-                    .padding(.bottom, 4)
+                HStack {
+                    Image(systemName: "person.2")
+                        .foregroundColor(AppTheme.primaryColor)
+                        .font(.footnote)
+                    Text("USERS")
+                        .sectionHeader()
+                }
             }
+            .listSectionSpacing(.compact)
             
             // Error Section
             if let error = apiManager.error {
@@ -700,20 +782,27 @@ private struct SettingsListContent: View {
             Section {
                 LocationSettingsView(locationManager: locationManager)
             } header: {
-                Text("LOCATION SETTINGS")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.blue)
-                    .textCase(nil)
-                    .padding(.bottom, 4)
+                HStack {
+                    Image(systemName: "location.fill")
+                        .foregroundColor(AppTheme.primaryColor)
+                        .font(.footnote)
+                    Text("LOCATION SETTINGS")
+                        .sectionHeader()
+                }
             } footer: {
                 if locationManager.backgroundUpdatesEnabled {
-                    Text("Background updates allow your location to be shared even when the app is closed.")
-                        .font(.footnote)
-                        .foregroundColor(Color(.systemGray))
-                        .padding(.top, 4)
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.caption)
+                        Text("Background updates allow your location to be shared even when the app is closed.")
+                            .font(.footnote)
+                            .foregroundColor(AppTheme.textSecondary)
+                    }
+                    .padding(.top, 4)
                 }
             }
+            .listSectionSpacing(.compact)
             
             // Notifications Section - UPDATED
             NotificationSettingsView(

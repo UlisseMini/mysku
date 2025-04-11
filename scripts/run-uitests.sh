@@ -1,6 +1,6 @@
 #!/bin/bash
-# Strict mode
-set -euo pipefail
+# Removed strict mode to allow continuing after test failures
+set -uo pipefail
 
 # Ensure jq is installed
 if ! command -v jq &> /dev/null; then
