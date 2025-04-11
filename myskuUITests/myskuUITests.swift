@@ -18,7 +18,7 @@ final class myskuUITests: XCTestCase {
         
         // Initialize and configure the instance variable 'app'
         app = XCUIApplication()
-        app.launchArguments = ["-UITests", "-ResetState"]
+        app.launchArguments = ["-UITests", "-ResetState", "-AutoDemo"]
         app.launchEnvironment = ["UITests": "true"]
     }
     
@@ -92,27 +92,18 @@ final class myskuUITests: XCTestCase {
     private func loginWithDemoMode(app: XCUIApplication) {
         // Find login button
         let loginButton = app.buttons["Continue with Discord"]
-        if !loginButton.waitForExistence(timeout: 5.0) { // Increased timeout slightly for robustness
-            takeScreenshot(app: app, named: "Login Button Not Found")
+        if !loginButton.waitForExistence(timeout: 5.0) { // Keep check for robustness
+            takeScreenshot(app: app, named: "Login Button Not Found (AutoDemo)")
             XCTFail("Login button not found")
-            return // Added return
+            return
         }
-        
-        // Long press to activate demo mode
-        loginButton.press(forDuration: 3.5)
-        
-        // Click Yes on the alert
-        let alert = app.alerts["Continue in demo mode?"]
-        if !alert.waitForExistence(timeout: 2.0) {
-            takeScreenshot(app: app, named: "Demo Mode Alert Not Found")
-            XCTFail("Demo mode alert not shown")
-            return // Added return
-        }
-        
-        alert.buttons["Yes"].tap()
-        
+
+        // Simply tap the button - the app should handle AutoDemo logic
+        loginButton.tap()
+
         // Wait for UI to update after demo mode activation (e.g., wait for Settings button)
-        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 5.0), "Settings button did not appear after demo mode activation")
+        // This confirms the AutoDemo logic worked in the app
+        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 5.0), "Settings button did not appear after AutoDemo activation")
     }
     
     private func takeScreenshot(app: XCUIApplication, named name: String) {

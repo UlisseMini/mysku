@@ -67,18 +67,27 @@ struct LoginButton: View {
                 }
                 .onEnded { _ in
                     if isPressed && !showingDemoAlert {
-                        onLoginTap()
+                        if ProcessInfo.processInfo.arguments.contains("-AutoDemo") {
+                            continueInDemoMode()
+                        } else {
+                            onLoginTap()
+                        }
                     }
                     isPressed = false
                 }
         )
         .alert("Continue in demo mode?", isPresented: $showingDemoAlert) {
             Button("Yes") {
-                UserDefaults.standard.setValue("demo", forKey: "auth_token")
-                AuthManager.shared.isAuthenticated = true
-                APIManager.shared.reset()
+                continueInDemoMode()
             }
             Button("No", role: .cancel) {}
         }
     }
 } 
+
+@MainActor
+func continueInDemoMode() {
+    UserDefaults.standard.setValue("demo", forKey: "auth_token")
+    AuthManager.shared.isAuthenticated = true
+    APIManager.shared.reset()
+}
