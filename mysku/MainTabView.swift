@@ -17,5 +17,16 @@ struct MainTabView: View {
                 }
                 .tag(1)
         }
+        .tint(.blue) // Use a consistent blue tint for the tab bar
+        .overlay(
+            // Add a subtle top border to the tab bar
+            VStack {
+                Spacer()
+                Rectangle()
+                    .frame(height: 0.5)
+                    .foregroundColor(Color(.systemGray5))
+                    .padding(.bottom, 49) // Tab bar height
+            }
+        )
     }
 } 
