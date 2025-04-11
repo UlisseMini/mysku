@@ -2,23 +2,26 @@
 
 This PR adds screenshots of the current UI state and implements various UI improvements across the app.
 
-## Screenshots
-The PR includes screenshots that showcase the following app views:
+<details>
+<summary>Click to view screenshots</summary>
 
 ### Launch and Authentication Flow
-- ![Launch Screen](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Launch_Screen_before_Login.png) - Launch screen before login
-- ![Login Screen](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Login_Screen_after_Logout.png) - Login screen after logout
-- ![Map View](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Map_View_after_Login.png) - Map view after successful login
+<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Launch_Screen_before_Login.png" width="300" alt="Launch Screen"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Login_Screen_after_Logout.png" width="300" alt="Login Screen"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Map_View_after_Login.png" width="300" alt="Map View">
 
 ### Settings Views
-- ![Settings Top](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Top.png) - Top section
-- ![Settings Middle](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Middle.png) - Middle section
-- ![Settings Bottom](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Bottom.png) - Bottom section
-- ![Account Section](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Account_Section.png) - Account section
-- ![Notifications](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Notifications.png) - Notifications section
-- ![Location 1](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Location_1.png) - Location settings (variation 1)
-- ![Location 2](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Location_2.png) - Location settings (variation 2)
-- ![Final Settings](https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Final.png) - Final settings view
+<details>
+<summary>Settings Sections</summary>
+
+#### Top, Middle, Bottom
+<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Top.png" width="250" alt="Settings Top"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Middle.png" width="250" alt="Settings Middle"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Bottom.png" width="250" alt="Settings Bottom">
+
+#### Feature Sections
+<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Account_Section.png" width="250" alt="Account Section"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Notifications.png" width="250" alt="Notifications"> <img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Location_1.png" width="250" alt="Location 1">
+
+#### Final View
+<img src="https://raw.githubusercontent.com/UlisseMini/mysku/claude/ui/screenshots/Settings_View_Final.png" width="300" alt="Final Settings">
+</details>
+</details>
 
 ## UI Changes Implemented
 
