@@ -15,9 +15,10 @@ cd "$(dirname "$0")/.."
 SCHEME="mysku"
 # Default destination (replace if needed or pass as argument)
 DEST="platform=iOS,id=00008101-001434D40081401E" 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULT_BUNDLE="TestResults/${TIMESTAMP}.xcresult"
-SCREENSHOT_DIR="TestResults/${TIMESTAMP}_screenshots"
+RESULT_BUNDLE="TestResults/latest.xcresult"
+SCREENSHOT_DIR="TestResults/latest_screenshots"
+
+rm -rf "$SCREENSHOT_DIR" "$RESULT_BUNDLE"
 
 # --- Test Execution ---
 echo "Running tests for scheme '$SCHEME'..."
