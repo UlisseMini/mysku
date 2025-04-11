@@ -1,5 +1,185 @@
 import SwiftUI
 
+// MARK: - Design System
+struct AppTheme {
+    // Colors
+    static let primaryColor = Color.blue
+    static let secondaryColor = Color(.systemGray5)
+    static let accentColor = Color.blue
+    static let destructiveColor = Color.red
+    static let textPrimary = Color(.label)
+    static let textSecondary = Color(.secondaryLabel)
+    static let textTertiary = Color(.tertiaryLabel)
+    static let backgroundPrimary = Color(.systemBackground)
+    static let backgroundSecondary = Color(.secondarySystemBackground)
+    static let cardBackground = Color(.tertiarySystemBackground)
+    
+    // Text Styles
+    static func title(_ text: Text) -> some View {
+        text
+            .font(.largeTitle)
+            .fontWeight(.bold)
+            .foregroundColor(textPrimary)
+    }
+    
+    static func heading(_ text: Text) -> some View {
+        text
+            .font(.headline)
+            .fontWeight(.semibold)
+            .foregroundColor(primaryColor)
+            .textCase(nil)
+    }
+    
+    static func sectionHeader(_ text: Text) -> some View {
+        text
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundColor(primaryColor)
+            .textCase(nil)
+            .padding(.bottom, 4)
+    }
+    
+    static func caption(_ text: Text) -> some View {
+        text
+            .font(.footnote)
+            .foregroundColor(textSecondary)
+            .padding(.top, 4)
+    }
+    
+    // Card Styles
+    static func card<Content: View>(_ content: Content) -> some View {
+        content
+            .padding()
+            .background(cardBackground)
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+    
+    // Custom Toggle Style
+    struct CustomToggleStyle: ToggleStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            HStack {
+                configuration.label
+                    .font(.body)
+                
+                Spacer()
+                
+                ZStack {
+                    Capsule()
+                        .fill(configuration.isOn ? primaryColor : Color(.systemGray4))
+                        .frame(width: 50, height: 30)
+                    
+                    Circle()
+                        .fill(Color.white)
+                        .shadow(radius: 1)
+                        .frame(width: 26, height: 26)
+                        .offset(x: configuration.isOn ? 10 : -10)
+                        .animation(.spring(response: 0.2), value: configuration.isOn)
+                }
+                .onTapGesture {
+                    withAnimation {
+                        configuration.isOn.toggle()
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+        }
+    }
+    
+    // Custom Picker Row
+    struct PickerRowStyle: ViewModifier {
+        var value: String
+        
+        func body(content: Content) -> some View {
+            HStack {
+                content
+                    .font(.body)
+                Spacer()
+                HStack(spacing: 6) {
+                    Text(value)
+                        .foregroundColor(primaryColor)
+                        .fontWeight(.medium)
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(primaryColor)
+                }
+            }
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+    }
+    
+    // Custom Button Styles
+    struct PrimaryButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .font(.body.weight(.medium))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(primaryColor)
+                        .opacity(configuration.isPressed ? 0.8 : 1.0)
+                )
+                .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+                .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+        }
+    }
+    
+    struct DestructiveButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .font(.body.weight(.medium))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(destructiveColor)
+                        .opacity(configuration.isPressed ? 0.8 : 1.0)
+                )
+                .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+                .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+        }
+    }
+}
+
+// MARK: - Extensions for Theme Styles
+extension Text {
+    func title() -> some View {
+        AppTheme.title(self)
+    }
+    
+    func heading() -> some View {
+        AppTheme.heading(self)
+    }
+    
+    func sectionHeader() -> some View {
+        AppTheme.sectionHeader(self)
+    }
+    
+    func caption() -> some View {
+        AppTheme.caption(self)
+    }
+}
+
+extension Toggle {
+    func customToggleStyle() -> some View {
+        self.toggleStyle(AppTheme.CustomToggleStyle())
+    }
+}
+
+extension View {
+    func withPickerRow(value: String) -> some View {
+        self.modifier(AppTheme.PickerRowStyle(value: value))
+    }
+    
+    func asCard() -> some View {
+        AppTheme.card(self)
+    }
+}
+
 // MARK: - Server List View
 struct ServerListView: View {
     let guilds: [Guild]
@@ -191,69 +371,127 @@ private struct LocationSettingsView: View {
     
     var body: some View {
         Section {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(spacing: 16) {
                 Toggle("Background Updates", isOn: $locationManager.backgroundUpdatesEnabled)
-                    .tint(.blue)
-            }
-            .padding(.vertical, 4)
-            
-            if locationManager.backgroundUpdatesEnabled {
-                HStack {
-                    Text("Update Interval")
-                    Spacer()
-                    Picker("", selection: $locationManager.updateInterval) {
-                        Text("30 seconds").tag(30.0)
-                        Text("1 minute").tag(60.0)
-                        Text("5 minutes").tag(300.0)
-                        Text("15 minutes").tag(900.0)
-                        Text("30 minutes").tag(1800.0)
-                        Text("1 hour").tag(3600.0)
-                    }
-                    .pickerStyle(.menu)
-                    .tint(.blue)
-                    .fixedSize()
-                }
-                .padding(.vertical, 4)
+                    .customToggleStyle()
                 
-                HStack {
-                    Text("Minimum Movement")
-                    Spacer()
-                    Picker("", selection: $locationManager.minimumMovementThreshold) {
-                        Text("100m").tag(100.0)
-                        Text("500m").tag(500.0)
-                        Text("1km").tag(1000.0)
-                        Text("5km").tag(5000.0)
-                        Text("10km").tag(10000.0)
+                if locationManager.backgroundUpdatesEnabled {
+                    Divider()
+                    
+                    VStack(spacing: 16) {
+                        Button(action: {}) {
+                            HStack {
+                                Image(systemName: "clock")
+                                    .foregroundColor(AppTheme.primaryColor)
+                                    .frame(width: 24, height: 24)
+                                
+                                Text("Update Interval")
+                                
+                                Spacer()
+                                
+                                Picker("", selection: $locationManager.updateInterval) {
+                                    Text("30 seconds").tag(30.0)
+                                    Text("1 minute").tag(60.0)
+                                    Text("5 minutes").tag(300.0)
+                                    Text("15 minutes").tag(900.0)
+                                    Text("30 minutes").tag(1800.0)
+                                    Text("1 hour").tag(3600.0)
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                            }
+                            .withPickerRow(value: getIntervalText(locationManager.updateInterval))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Button(action: {}) {
+                            HStack {
+                                Image(systemName: "arrow.up.and.down")
+                                    .foregroundColor(AppTheme.primaryColor)
+                                    .frame(width: 24, height: 24)
+                                
+                                Text("Minimum Movement")
+                                
+                                Spacer()
+                                
+                                Picker("", selection: $locationManager.minimumMovementThreshold) {
+                                    Text("100m").tag(100.0)
+                                    Text("500m").tag(500.0)
+                                    Text("1km").tag(1000.0)
+                                    Text("5km").tag(5000.0)
+                                    Text("10km").tag(10000.0)
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                            }
+                            .withPickerRow(value: getDistanceText(locationManager.minimumMovementThreshold))
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .pickerStyle(.menu)
-                    .tint(.blue)
-                    .fixedSize()
                 }
-                .padding(.vertical, 4)
-            }
-            
-            HStack {
-                Text("Location Privacy")
-                Spacer()
-                Picker("", selection: $locationManager.desiredAccuracy) {
-                    Text("Full Accuracy").tag(0.0)
-                    Text("1 km").tag(1000.0)
-                    Text("5 km").tag(5000.0)
-                    Text("10 km").tag(10000.0)
-                    Text("100 km").tag(100000.0)
+                
+                Divider()
+                
+                Button(action: {}) {
+                    HStack {
+                        Image(systemName: "eye.slash")
+                            .foregroundColor(AppTheme.primaryColor)
+                            .frame(width: 24, height: 24)
+                        
+                        Text("Location Privacy")
+                        
+                        Spacer()
+                        
+                        Picker("", selection: $locationManager.desiredAccuracy) {
+                            Text("Full Accuracy").tag(0.0)
+                            Text("1 km").tag(1000.0)
+                            Text("5 km").tag(5000.0)
+                            Text("10 km").tag(10000.0)
+                            Text("100 km").tag(100000.0)
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+                    .withPickerRow(value: getAccuracyText(locationManager.desiredAccuracy))
                 }
-                .pickerStyle(.menu)
-                .tint(.blue)
-                .fixedSize()
+                .buttonStyle(PlainButtonStyle())
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 8)
         } header: {
             Text("LOCATION SETTINGS")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.blue)
-                .textCase(nil)
-                .padding(.bottom, 4)
+                .sectionHeader()
+        }
+    }
+    
+    private func getIntervalText(_ interval: TimeInterval) -> String {
+        switch interval {
+        case 30.0: return "30 seconds"
+        case 60.0: return "1 minute"
+        case 300.0: return "5 minutes"
+        case 900.0: return "15 minutes"
+        case 1800.0: return "30 minutes"
+        case 3600.0: return "1 hour"
+        default: return "\(Int(interval)) seconds"
+        }
+    }
+    
+    private func getDistanceText(_ distance: Double) -> String {
+        if distance >= 1000 {
+            let km = distance / 1000.0
+            return "\(Int(km)) km"
+        } else {
+            return "\(Int(distance)) m"
+        }
+    }
+    
+    private func getAccuracyText(_ accuracy: Double) -> String {
+        if accuracy == 0 {
+            return "Full Accuracy"
+        } else if accuracy >= 1000 {
+            let km = accuracy / 1000.0
+            return "\(Int(km)) km"
+        } else {
+            return "\(Int(accuracy)) m"
         }
     }
 }
@@ -266,44 +504,44 @@ private struct AccountActionsView: View {
     
     var body: some View {
         Section {
-            Button("Logout") {
-                authManager.logout()
-            }
-            .accessibilityIdentifier("Logout")
-            .foregroundColor(.red)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .padding(.vertical, 8)
-            .overlay(
-                HStack {
-                    Spacer()
-                    Image(systemName: "arrow.right.circle.fill")
-                        .foregroundColor(.red)
+            VStack(spacing: 16) {
+                Button {
+                    authManager.logout()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.right.on.rectangle")
+                            .font(.system(size: 18))
+                        Text("Logout")
+                            .fontWeight(.medium)
+                    }
                 }
-            )
-            
-            Button("Delete My Data") {
-                showingDeleteConfirmation = true
-            }
-            .accessibilityIdentifier("DeleteMyData")
-            .foregroundColor(.red)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .padding(.vertical, 8)
-            .overlay(
-                HStack {
-                    Spacer()
-                    Image(systemName: "trash.fill")
-                        .foregroundColor(.red)
+                .accessibilityIdentifier("Logout")
+                .buttonStyle(AppTheme.DestructiveButtonStyle())
+                .padding(.top, 8)
+                
+                Button {
+                    showingDeleteConfirmation = true
+                } label: {
+                    HStack {
+                        Image(systemName: "trash")
+                            .font(.system(size: 18))
+                        Text("Delete My Data")
+                            .fontWeight(.medium)
+                    }
                 }
-            )
+                .accessibilityIdentifier("DeleteMyData")
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(AppTheme.destructiveColor, lineWidth: 1)
+                )
+                .foregroundColor(AppTheme.destructiveColor)
+                .padding(.bottom, 8)
+            }
         } header: {
             Text("ACCOUNT")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.blue)
-                .textCase(nil)
-                .padding(.bottom, 4)
+                .sectionHeader()
         }
     }
 }
@@ -316,26 +554,46 @@ private struct LoadingOverlayView: View {
     var body: some View {
         ZStack {
             if isLoading || isSaving {
-                Color.black.opacity(0.2)
+                // Background blur
+                Color.black.opacity(0.4)
                     .edgesIgnoringSafeArea(.all)
+                    .transition(.opacity)
                 
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.3)
-                        .tint(.blue)
+                // Loading card
+                VStack(spacing: 20) {
+                    ZStack {
+                        Circle()
+                            .stroke(AppTheme.secondaryColor, lineWidth: 4)
+                            .frame(width: 50, height: 50)
+                        
+                        Circle()
+                            .trim(from: 0, to: 0.75)
+                            .stroke(AppTheme.primaryColor, lineWidth: 4)
+                            .frame(width: 50, height: 50)
+                            .rotationEffect(Angle(degrees: isLoading ? 360 : 0))
+                            .animation(Animation.linear(duration: 1).repeatForever(autoreverses: false), value: isLoading)
+                    }
                     
                     Text(isLoading ? "Loading..." : "Saving...")
-                        .font(.subheadline)
+                        .font(.headline)
                         .fontWeight(.medium)
                 }
-                .padding(20)
+                .padding(24)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemBackground))
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(AppTheme.backgroundPrimary)
+                        .opacity(0.95)
                 )
-                .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(AppTheme.primaryColor.opacity(0.2), lineWidth: 1)
+                )
+                .frame(width: 200)
+                .shadow(color: Color.black.opacity(0.2), radius: 16, x: 0, y: 6)
+                .transition(.scale.combined(with: .opacity))
             }
         }
+        .animation(.spring(), value: isLoading || isSaving)
     }
 }
 
