@@ -190,38 +190,70 @@ private struct LocationSettingsView: View {
     @ObservedObject var locationManager: LocationManager
     
     var body: some View {
-        Section(header: Text("Location Settings")) {
-            Toggle("Background Updates", isOn: $locationManager.backgroundUpdatesEnabled)
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Background Updates", isOn: $locationManager.backgroundUpdatesEnabled)
+                    .tint(.blue)
+            }
+            .padding(.vertical, 4)
             
             if locationManager.backgroundUpdatesEnabled {
-                Picker("Update Interval", selection: $locationManager.updateInterval) {
-                    Text("30 seconds").tag(30.0)
-                    Text("1 minute").tag(60.0)
-                    Text("5 minutes").tag(300.0)
-                    Text("15 minutes").tag(900.0)
-                    Text("30 minutes").tag(1800.0)
-                    Text("1 hour").tag(3600.0)
+                HStack {
+                    Text("Update Interval")
+                    Spacer()
+                    Picker("", selection: $locationManager.updateInterval) {
+                        Text("30 seconds").tag(30.0)
+                        Text("1 minute").tag(60.0)
+                        Text("5 minutes").tag(300.0)
+                        Text("15 minutes").tag(900.0)
+                        Text("30 minutes").tag(1800.0)
+                        Text("1 hour").tag(3600.0)
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.blue)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
+                .padding(.vertical, 4)
                 
-                Picker("Minimum Movement", selection: $locationManager.minimumMovementThreshold) {
-                    Text("100m").tag(100.0)
-                    Text("500m").tag(500.0)
-                    Text("1km").tag(1000.0)
-                    Text("5km").tag(5000.0)
-                    Text("10km").tag(10000.0)
+                HStack {
+                    Text("Minimum Movement")
+                    Spacer()
+                    Picker("", selection: $locationManager.minimumMovementThreshold) {
+                        Text("100m").tag(100.0)
+                        Text("500m").tag(500.0)
+                        Text("1km").tag(1000.0)
+                        Text("5km").tag(5000.0)
+                        Text("10km").tag(10000.0)
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.blue)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
+                .padding(.vertical, 4)
             }
             
-            Picker("Location Privacy", selection: $locationManager.desiredAccuracy) {
-                Text("Full Accuracy").tag(0.0)
-                Text("1 km").tag(1000.0)
-                Text("5 km").tag(5000.0)
-                Text("10 km").tag(10000.0)
-                Text("100 km").tag(100000.0)
+            HStack {
+                Text("Location Privacy")
+                Spacer()
+                Picker("", selection: $locationManager.desiredAccuracy) {
+                    Text("Full Accuracy").tag(0.0)
+                    Text("1 km").tag(1000.0)
+                    Text("5 km").tag(5000.0)
+                    Text("10 km").tag(10000.0)
+                    Text("100 km").tag(100000.0)
+                }
+                .pickerStyle(.menu)
+                .tint(.blue)
+                .fixedSize()
             }
-            .pickerStyle(.menu)
+            .padding(.vertical, 4)
+        } header: {
+            Text("LOCATION SETTINGS")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.blue)
+                .textCase(nil)
+                .padding(.bottom, 4)
         }
     }
 }
@@ -234,29 +266,44 @@ private struct AccountActionsView: View {
     
     var body: some View {
         Section {
-            Button(action: {
+            Button("Logout") {
                 authManager.logout()
-            }) {
+            }
+            .accessibilityIdentifier("Logout")
+            .foregroundColor(.red)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .padding(.vertical, 8)
+            .overlay(
                 HStack {
-                    Text("Logout")
-                        .foregroundColor(.red)
                     Spacer()
                     Image(systemName: "arrow.right.circle.fill")
                         .foregroundColor(.red)
                 }
-            }
+            )
             
-            Button(action: {
+            Button("Delete My Data") {
                 showingDeleteConfirmation = true
-            }) {
+            }
+            .accessibilityIdentifier("DeleteMyData")
+            .foregroundColor(.red)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .padding(.vertical, 8)
+            .overlay(
                 HStack {
-                    Text("Delete My Data")
-                        .foregroundColor(.red)
                     Spacer()
                     Image(systemName: "trash.fill")
                         .foregroundColor(.red)
                 }
-            }
+            )
+        } header: {
+            Text("ACCOUNT")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.blue)
+                .textCase(nil)
+                .padding(.bottom, 4)
         }
     }
 }
@@ -268,20 +315,25 @@ private struct LoadingOverlayView: View {
     
     var body: some View {
         ZStack {
-            if isLoading {
-                ProgressView()
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(8)
-                    .shadow(radius: 2)
-            }
-            
-            if isSaving {
-                ProgressView()
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(8)
-                    .shadow(radius: 2)
+            if isLoading || isSaving {
+                Color.black.opacity(0.2)
+                    .edgesIgnoringSafeArea(.all)
+                
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.3)
+                        .tint(.blue)
+                    
+                    Text(isLoading ? "Loading..." : "Saving...")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemBackground))
+                )
+                .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
             }
         }
     }
@@ -346,8 +398,9 @@ private struct SettingsListContent: View {
                 Text("DISCORD SERVERS")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.blue)
                     .textCase(nil)
+                    .padding(.bottom, 4)
             }
             .padding(.bottom, 20)
             
@@ -371,8 +424,9 @@ private struct SettingsListContent: View {
                 Text("USERS")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.blue)
                     .textCase(nil)
+                    .padding(.bottom, 4)
             }
             
             // Error Section
@@ -391,11 +445,15 @@ private struct SettingsListContent: View {
                 Text("LOCATION SETTINGS")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.blue)
                     .textCase(nil)
+                    .padding(.bottom, 4)
             } footer: {
                 if locationManager.backgroundUpdatesEnabled {
                     Text("Background updates allow your location to be shared even when the app is closed.")
+                        .font(.footnote)
+                        .foregroundColor(Color(.systemGray))
+                        .padding(.top, 4)
                 }
             }
             
