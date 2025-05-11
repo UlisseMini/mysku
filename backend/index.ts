@@ -316,56 +316,44 @@ function roundCoordinates(location: Location): Location {
 // Get all users we have access to see
 app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
-    // console.log('GET /users: Processing request for user:', user.id);
-
-    // Filter users based on guild membership and privacy settings
-    const visibleUsers: User[] = Object.values(users).filter(otherUser => {
-        // Always include the current user
-        if (otherUser.id === user.id) return true;
-
-        // Check if users share any guilds
-        const sharedGuilds = user.privacy.enabledGuilds.filter(guild =>
-            otherUser.privacy.enabledGuilds.includes(guild)
-        );
-
-        return sharedGuilds.length > 0;
-    }).map(otherUser => {
-        // If either user has blocked the other, return user without location
-        if (user.privacy.blockedUsers.includes(otherUser.id) ||
-            otherUser.privacy.blockedUsers.includes(user.id)) {
-            console.log(`GET /users: User ${otherUser.id} is blocked, removing location`);
-            return {
-                ...otherUser,
-                location: undefined
-            };
-        }
-
-        // Round coordinates based on the user's requested accuracy
-        if (otherUser.location) {
-            // Ensure desiredAccuracy exists for migration
-            const location = {
-                ...otherUser.location,
-                desiredAccuracy: otherUser.location.desiredAccuracy ?? 0
-            };
-
-            // console.debug(`GET /users: Processing location for user ${otherUser.id}:`, {
-            //     original: location,
-            //     rounded: roundCoordinates(location)
-            // });
-
-            return {
-                ...otherUser,
-                location: roundCoordinates(location)
-            };
-        }
-
-        return otherUser;
-    });
-
-    const jiggledUsers = jiggleUsers(visibleUsers);
-    // console.log('GET /users: Final user count:', jiggledUsers.length);
-    res.json(jiggledUsers);
+    
+    const visibleUsers = Object.values(users)
+        .filter(other => other.id === user.id || 
+            hasSharedGuilds(user, other))
+        .map(other => {
+            // Remove location if either user blocked the other
+            if (isBlocked(user, other)) {
+                return { ...other, location: undefined };
+            }
+            
+            // Process location if it exists
+            if (other.location) {
+                return { 
+                    ...other, 
+                    location: roundCoordinates({
+                        ...other.location,
+                        desiredAccuracy: other.location.desiredAccuracy ?? 0
+                    })
+                };
+            }
+            return other;
+        });
+    
+    res.json(jiggleUsers(visibleUsers));
 });
+
+// Helper functions
+function hasSharedGuilds(user1: User, user2: User): boolean {
+    return user1.privacy.enabledGuilds.some(guild => 
+        user2.privacy.enabledGuilds.includes(guild));
+}
+
+function isBlocked(user1: User, user2: User): boolean {
+    const blocked = user1.privacy.blockedUsers.includes(user2.id) || 
+                   user2.privacy.blockedUsers.includes(user1.id);
+    if (blocked) console.log(`GET /users: User ${user2.id} is blocked, removing location`);
+    return blocked;
+}
 
 // Update user data (location, privacy settings, etc)
 app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): Promise<void> => {
