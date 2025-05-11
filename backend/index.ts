@@ -1,6 +1,6 @@
 import express from 'express';
-import { Request, Response as ExpressResponse, NextFunction } from 'express';
-import fetch, { Response as FetchResponse, RequestInit } from 'node-fetch';
+import type { Request, Response as ExpressResponse, NextFunction } from 'express';
+import fetch, { Response as FetchResponse, type RequestInit } from 'node-fetch';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
@@ -129,14 +129,15 @@ app.use(express.json());
 const users: Record<string, User> = {};
 const tokenToUserId: Record<string, string> = {};
 
-// Load any existing data
-loadPersistedData();
+// The following data loading and interval setup will be moved to the main() function.
+// // Load any existing data
+// loadPersistedData();
 
-// Set up periodic saving
-if (fs.existsSync(DB_DIR)) {
-    setInterval(saveDataToDisk, 60000); // Save every minute
-    console.log('Automatic data persistence enabled');
-}
+// // Set up periodic saving
+// if (fs.existsSync(DB_DIR)) {
+//     setInterval(saveDataToDisk, 60000); // Save every minute
+//     console.log('Automatic data persistence enabled');
+// }
 
 // Fetch demo data, validate it, merge demo users into the users store
 const rawDemoData = JSON.parse(fs.readFileSync(path.join(__dirname, 'demo-mode.json'), 'utf-8'));
@@ -197,7 +198,7 @@ function isDemoApiPath(path: string): path is keyof Pick<DemoData, 'users/@me' |
 // Middleware to verify Discord token
 const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunction): Promise<void> => {
     const authHeader = req.headers.authorization;
-    console.log('verify: auth header:', authHeader);
+    // console.log('verify: auth header:', authHeader);
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         console.error('verify: invalid auth header format');
@@ -206,13 +207,13 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
     }
 
     const token = authHeader.split(' ')[1];
-    console.log('verify: attempting to validate token with Discord');
+    // console.log('verify: attempting to validate token with Discord');
 
     try {
         // First check our token cache
         const cachedUserId = tokenToUserId[token];
         if (cachedUserId && users[cachedUserId]) {
-            console.log('verify: found cached user:', cachedUserId);
+            // console.log('verify: found cached user:', cachedUserId);
             req.user = users[cachedUserId];
             next();
             return;
@@ -222,7 +223,7 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
         const userResponse = await discordFetch('users/@me', token);
 
         const responseText = await userResponse.text();
-        console.log('verify: Discord response status:', userResponse.status);
+        // console.log('verify: Discord response status:', userResponse.status);
 
         if (!userResponse.ok) {
             console.error('verify: Discord validation failed:', {
@@ -238,7 +239,7 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
             const rawUserData = JSON.parse(responseText);
             // Validate Discord user data
             userData = DiscordUserSchema.parse(rawUserData);
-            console.log('verify: got user data for:', userData.username);
+            // console.log('verify: got user data for:', userData.username);
         } catch (e) {
             console.error('verify: Failed to parse/validate user data:', e);
             console.error('verify: Raw response:', responseText);
@@ -272,7 +273,7 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
         users[userData.id] = user;
         tokenToUserId[token] = userData.id;
 
-        console.log('verify: stored new user in cache:', userData.id);
+        // console.log('verify: stored new user in cache:', userData.id);
         req.user = user;
         next();
     } catch (error) {
@@ -315,7 +316,7 @@ function roundCoordinates(location: Location): Location {
 // Get all users we have access to see
 app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
-    console.log('GET /users: Processing request for user:', user.id);
+    // console.log('GET /users: Processing request for user:', user.id);
 
     // Filter users based on guild membership and privacy settings
     const visibleUsers: User[] = Object.values(users).filter(otherUser => {
@@ -362,17 +363,17 @@ app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     });
 
     const jiggledUsers = jiggleUsers(visibleUsers);
-    console.log('GET /users: Final user count:', jiggledUsers.length);
+    // console.log('GET /users: Final user count:', jiggledUsers.length);
     res.json(jiggledUsers);
 });
 
 // Update user data (location, privacy settings, etc)
 app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): Promise<void> => {
     const currentUser = req.user!;
-    console.log('POST /users/me: Received update request:', {
-        userId: currentUser.id,
-        body: req.body
-    });
+    // console.log('POST /users/me: Received update request:', {
+    //     userId: currentUser.id,
+    //     body: req.body
+    // });
 
     try {
         const { username, guild, location, privacy, pushToken,
@@ -398,13 +399,13 @@ app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): P
             allowNearbyNotifications: allowNearbyNotifications ?? currentUser.allowNearbyNotifications ?? true
         });
 
-        console.log('POST /users/me: Validated and processed user data:', {
-            userId: updatedUser.id,
-            location: updatedUser.location,
-            pushToken: updatedUser.pushToken,
-            receiveNearbyNotifications: updatedUser.receiveNearbyNotifications,
-            allowNearbyNotifications: updatedUser.allowNearbyNotifications
-        });
+        // console.log('POST /users/me: Validated and processed user data:', {
+        //     userId: updatedUser.id,
+        //     location: updatedUser.location,
+        //     pushToken: updatedUser.pushToken,
+        //     receiveNearbyNotifications: updatedUser.receiveNearbyNotifications,
+        //     allowNearbyNotifications: updatedUser.allowNearbyNotifications
+        // });
 
         // Ensure the user can only update their own data
         if (currentUser.id !== updatedUser.id) {
@@ -435,7 +436,7 @@ app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): P
 
 app.get('/users/me', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
-    console.debug('users/me: user:', user);
+    // console.debug('users/me: user:', user);
     res.json(user);
 });
 
@@ -798,39 +799,67 @@ async function checkNearbyUsers() {
     }
 }
 
-// Set up periodic check for nearby users
-setInterval(checkNearbyUsers, 6000); // Check every 6s (for now)
+// The following interval setup will be moved to the main() function.
+// // Set up periodic check for nearby users
+// setInterval(checkNearbyUsers, 6000); // Check every 6s (for now)
 
-// Start the server
-const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-});
+async function main() {
+    console.log('Executing main application function...');
 
-// Handle graceful shutdown
-const shutdown = async () => {
-    console.log('\nReceived shutdown signal. Closing server...');
+    // Load any existing data
+    loadPersistedData();
 
-    // Close the server
-    server.close(() => {
-        console.log('Server closed');
+    // Set up periodic saving
+    if (fs.existsSync(DB_DIR)) {
+        setInterval(saveDataToDisk, 60000); // Save every minute
+        console.log('Automatic data persistence enabled');
+    } else {
+        console.log('DB_DIR does not exist, automatic data persistence disabled.');
+    }
 
-        // Close APNs provider if it exists
-        if (apnProvider) {
-            apnProvider.shutdown();
-            console.log('APNs provider closed');
-        }
+    // Set up periodic check for nearby users
+    setInterval(checkNearbyUsers, 6000); // Check every 6s
 
-        // Save any pending data
-        saveDataToDisk();
-
-        console.log('Cleanup complete. Exiting...');
-        process.exit(0);
+    // Start the server
+    console.log(`Attempting to start server on port ${port}...`);
+    const server = app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
     });
-};
 
-// Handle SIGINT (Ctrl+C) and SIGTERM signals
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+    server.on('error', (err: Error) => {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    });
+
+    // Handle graceful shutdown
+    const shutdown = () => {
+        console.log('\nReceived shutdown signal. Closing server...');
+
+        server.close((err?: Error) => {
+            if (err) {
+                console.error('Error during server close:', err);
+            } else {
+                console.log('Server closed');
+            }
+
+            if (apnProvider) {
+                apnProvider.shutdown();
+                console.log('APNs provider closed');
+            }
+
+            // Save any pending data
+            saveDataToDisk();
+
+            console.log('Cleanup complete. Exiting...');
+            process.exit(err ? 1 : 0);
+        });
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+
+    console.log('Application main function finished setup. Server is running and periodic tasks scheduled.');
+}
 
 // Global error handling middleware - add before the export
 app.use((err: Error, req: Request, res: ExpressResponse, next: NextFunction) => {
@@ -859,10 +888,22 @@ process.on('unhandledRejection', (reason) => {
     reportErrorToWebhook(error).catch(console.error);
 });
 
+// Run main function if this script is executed directly
+if (import.meta.main) {
+    main().catch(err => {
+        console.error("Failed to execute main application logic:", err);
+        process.exit(1);
+    });
+}
+
 // Add explicit export to mark as ESM module
 export default app;
 
 function loadPersistedData() {
+    if (!import.meta.main) {
+        console.log('Not in main module, skipping data load');
+        return;
+    }
     if (!fs.existsSync(DB_DIR)) {
         console.log('No db directory found, skipping data load');
         return;
@@ -892,6 +933,10 @@ function loadPersistedData() {
 }
 
 function saveDataToDisk() {
+    if (!import.meta.main) {
+        console.log('Not in main module, skipping data persistence');
+        return;
+    }
     if (!fs.existsSync(DB_DIR)) {
         return; // Don't save if db directory doesn't exist
     }

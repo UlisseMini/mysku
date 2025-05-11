@@ -1,4 +1,5 @@
 import type { User } from './schemas';
+import type { Request } from 'express';
 
 // Error reporting webhook URL from environment variable
 const ERROR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1353024080550301788/UcxP89nUSNEQ_994CAYXrJVFPyXxOQtB3rBolgZ2-hgb23XBjQ4R2BCnd-MkFwNlcIzQ';
