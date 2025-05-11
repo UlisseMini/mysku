@@ -1,6 +1,6 @@
 import express from 'express';
-import { Request, Response as ExpressResponse, NextFunction } from 'express';
-import fetch, { Response as FetchResponse, RequestInit } from 'node-fetch';
+import type { Request, Response as ExpressResponse, NextFunction } from 'express';
+import fetch, { Response as FetchResponse, type RequestInit } from 'node-fetch';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +8,9 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
 import apn from 'node-apn';
+import { RecentNotificationSchema, LocationSchema, DiscordUserSchema, UserSchema, DiscordTokenResponseSchema, GuildSchema, DemoDataSchema } from './src/schemas';
+import type { Location, DiscordUser, User, Guild, DemoData, RecentNotification } from './src/schemas';
+import { reportErrorToWebhook, reportNearbyUsersToWebhook } from './src/utils';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -48,130 +51,6 @@ try {
 } catch (error) {
     console.error('Failed to initialize APNs provider:', error);
     throw error;
-}
-
-// Error reporting webhook URL from environment variable
-const ERROR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1353024080550301788/UcxP89nUSNEQ_994CAYXrJVFPyXxOQtB3rBolgZ2-hgb23XBjQ4R2BCnd-MkFwNlcIzQ';
-const NEARBY_WEBHOOK_URL = 'https://discord.com/api/webhooks/1358243072642646076/dC2NbR8MaDEQAzMPXTnaDI_XVnB2iuxxvGCbrbguPn1fQyQec3igtV_RF4S7G9YEGjZb'; // Added webhook for nearby notifications
-
-// Function to report errors to webhook
-async function reportErrorToWebhook(error: Error, req?: Request): Promise<void> {
-    if (!ERROR_WEBHOOK_URL) {
-        console.warn('Error webhook URL not configured. Set ERROR_WEBHOOK_URL in .env file to enable error reporting.');
-        return;
-    }
-
-    try {
-        // Create readable timestamp
-        const timestamp = new Date().toISOString();
-
-        // Format stack trace - limit to first 4 lines if it's too long
-        const stackLines = error.stack?.split('\n') || [];
-        const limitedStack = stackLines.slice(0, 4).join('\n');
-        const stackTrace = limitedStack + (stackLines.length > 4 ? '\n...(truncated)' : '');
-
-        // Create Discord webhook message with embeds for better formatting
-        const webhookPayload = {
-            content: "🚨 **Server Error Detected** 🚨",
-            embeds: [
-                {
-                    title: `Error: ${error.name}`,
-                    description: error.message,
-                    color: 15548997, // Red color
-                    fields: [
-                        {
-                            name: "📋 Stack Trace",
-                            value: `\`\`\`\n${stackTrace}\n\`\`\``,
-                            inline: false
-                        },
-                        {
-                            name: "⏰ Timestamp",
-                            value: timestamp,
-                            inline: true
-                        }
-                    ],
-                    footer: {
-                        text: "MySkew Error Monitoring"
-                    }
-                }
-            ]
-        };
-
-        // Add request details if available
-        if (req) {
-            const requestDetailsField = {
-                name: "🌐 Request Details",
-                value: [
-                    `**Method:** ${req.method}`,
-                    `**Path:** ${req.url}`,
-                    `**IP:** ${req.ip}`,
-                    `**User-Agent:** ${req.headers['user-agent'] || 'N/A'}`
-                ].join('\n'),
-                inline: false
-            };
-
-            // Add query params if present
-            if (Object.keys(req.query).length > 0) {
-                requestDetailsField.value += `\n**Query:** \`${JSON.stringify(req.query).slice(0, 500)}\``;
-            }
-
-            // Add body if present (truncate if too large)
-            if (req.body && Object.keys(req.body).length > 0) {
-                let bodyStr = JSON.stringify(req.body);
-                if (bodyStr.length > 500) {
-                    bodyStr = bodyStr.slice(0, 497) + '...';
-                }
-                requestDetailsField.value += `\n**Body:** \`${bodyStr}\``;
-            }
-
-            webhookPayload.embeds[0].fields.push(requestDetailsField);
-        }
-
-        await fetch(ERROR_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(webhookPayload)
-        });
-
-        console.log('Error reported to webhook');
-    } catch (webhookError) {
-        console.error('Failed to report error to webhook:', webhookError);
-    }
-}
-
-// Function to report nearby users to webhook - NEW
-async function reportNearbyUsersToWebhook(user1: User, user2: User, distance: number): Promise<void> {
-    if (!NEARBY_WEBHOOK_URL) {
-        console.warn('Nearby webhook URL not configured.');
-        return;
-    }
-
-    try {
-        const timestamp = new Date().toISOString();
-        const message = `📍 Users Nearby Detected!
-**${user1.duser.username}** and **${user2.duser.username}** are approximately **${Math.round(distance)}m** apart.
-Timestamp: ${timestamp}`;
-
-        const webhookPayload = {
-            content: message
-        };
-
-        await fetch(NEARBY_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(webhookPayload)
-        });
-
-        console.log(`Reported nearby users (${user1.duser.username}, ${user2.duser.username}) to webhook`);
-    } catch (webhookError) {
-        console.error('Failed to report nearby users to webhook:', webhookError);
-        // Optionally report this failure to the error webhook
-        await reportErrorToWebhook(new Error(`Failed to send nearby notification webhook: ${webhookError}`)).catch(console.error);
-    }
 }
 
 // Cache interfaces and implementations
@@ -229,84 +108,6 @@ if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) {
     throw new Error('Missing required environment variables. Please check your .env file.');
 }
 
-// Zod Schemas
-const LocationSchema = z.object({
-    latitude: z.number(),
-    longitude: z.number(),
-    accuracy: z.number(),      // Actual GPS accuracy in meters
-    desiredAccuracy: z.number().optional(), // User's desired privacy-preserving accuracy in meters (optional for backward compatibility)
-    lastUpdated: z.number()
-});
-
-const PrivacySettingsSchema = z.object({
-    enabledGuilds: z.array(z.string()), // guilds sharing & viewing is enabled for
-    blockedUsers: z.array(z.string()) // users who we shouldn't send location to
-});
-
-const DiscordUserSchema = z.object({
-    id: z.string(),
-    username: z.string(),
-    avatar: z.string().nullable().optional()
-});
-
-const UserSchema = z.object({
-    id: z.string(),
-    location: LocationSchema.optional(),
-    duser: DiscordUserSchema,
-    privacy: PrivacySettingsSchema,
-    pushToken: z.string().optional(),
-    receiveNearbyNotifications: z.boolean().optional(),
-    allowNearbyNotifications: z.boolean().optional()
-});
-
-const DiscordTokenResponseSchema = z.object({
-    access_token: z.string(),
-    token_type: z.string(),
-    expires_in: z.number(),
-    refresh_token: z.string(),
-    scope: z.string()
-});
-
-// Guild schemas
-const GuildSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    icon: z.string().nullable()
-});
-
-// Demo data schema (defined after other schemas it depends on)
-const DemoDataSchema = z.object({
-    'users/@me': z.object({
-        demo: DiscordUserSchema
-    }),
-    'users/@me/guilds': z.object({
-        demo: z.array(GuildSchema)
-    }),
-    'db': z.object({
-        users: z.record(UserSchema)
-    })
-});
-
-type DemoData = z.infer<typeof DemoDataSchema>;
-type DemoApiPath = keyof DemoData;
-
-// Type inference from schemas
-type Location = z.infer<typeof LocationSchema>;
-type PrivacySettings = z.infer<typeof PrivacySettingsSchema>;
-type DiscordUser = z.infer<typeof DiscordUserSchema>;
-type User = z.infer<typeof UserSchema>;
-type DiscordTokenResponse = z.infer<typeof DiscordTokenResponseSchema>;
-type Guild = z.infer<typeof GuildSchema>;
-
-// Add schema for recent notifications
-const RecentNotificationSchema = z.object({
-    user1Id: z.string(),
-    user2Id: z.string(),
-    timestamp: z.number()
-});
-
-type RecentNotification = z.infer<typeof RecentNotificationSchema>;
-
 // Add type declaration for the extended Request
 declare global {
     namespace Express {
@@ -328,14 +129,15 @@ app.use(express.json());
 const users: Record<string, User> = {};
 const tokenToUserId: Record<string, string> = {};
 
-// Load any existing data
-loadPersistedData();
+// The following data loading and interval setup will be moved to the main() function.
+// // Load any existing data
+// loadPersistedData();
 
-// Set up periodic saving
-if (fs.existsSync(DB_DIR)) {
-    setInterval(saveDataToDisk, 60000); // Save every minute
-    console.log('Automatic data persistence enabled');
-}
+// // Set up periodic saving
+// if (fs.existsSync(DB_DIR)) {
+//     setInterval(saveDataToDisk, 60000); // Save every minute
+//     console.log('Automatic data persistence enabled');
+// }
 
 // Fetch demo data, validate it, merge demo users into the users store
 const rawDemoData = JSON.parse(fs.readFileSync(path.join(__dirname, 'demo-mode.json'), 'utf-8'));
@@ -396,7 +198,7 @@ function isDemoApiPath(path: string): path is keyof Pick<DemoData, 'users/@me' |
 // Middleware to verify Discord token
 const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunction): Promise<void> => {
     const authHeader = req.headers.authorization;
-    console.log('verify: auth header:', authHeader);
+    // console.log('verify: auth header:', authHeader);
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         console.error('verify: invalid auth header format');
@@ -405,13 +207,13 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
     }
 
     const token = authHeader.split(' ')[1];
-    console.log('verify: attempting to validate token with Discord');
+    // console.log('verify: attempting to validate token with Discord');
 
     try {
         // First check our token cache
         const cachedUserId = tokenToUserId[token];
         if (cachedUserId && users[cachedUserId]) {
-            console.log('verify: found cached user:', cachedUserId);
+            // console.log('verify: found cached user:', cachedUserId);
             req.user = users[cachedUserId];
             next();
             return;
@@ -421,7 +223,7 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
         const userResponse = await discordFetch('users/@me', token);
 
         const responseText = await userResponse.text();
-        console.log('verify: Discord response status:', userResponse.status);
+        // console.log('verify: Discord response status:', userResponse.status);
 
         if (!userResponse.ok) {
             console.error('verify: Discord validation failed:', {
@@ -437,7 +239,7 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
             const rawUserData = JSON.parse(responseText);
             // Validate Discord user data
             userData = DiscordUserSchema.parse(rawUserData);
-            console.log('verify: got user data for:', userData.username);
+            // console.log('verify: got user data for:', userData.username);
         } catch (e) {
             console.error('verify: Failed to parse/validate user data:', e);
             console.error('verify: Raw response:', responseText);
@@ -471,7 +273,7 @@ const verifyToken = async (req: Request, res: ExpressResponse, next: NextFunctio
         users[userData.id] = user;
         tokenToUserId[token] = userData.id;
 
-        console.log('verify: stored new user in cache:', userData.id);
+        // console.log('verify: stored new user in cache:', userData.id);
         req.user = user;
         next();
     } catch (error) {
@@ -514,64 +316,52 @@ function roundCoordinates(location: Location): Location {
 // Get all users we have access to see
 app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
-    console.log('GET /users: Processing request for user:', user.id);
-
-    // Filter users based on guild membership and privacy settings
-    const visibleUsers: User[] = Object.values(users).filter(otherUser => {
-        // Always include the current user
-        if (otherUser.id === user.id) return true;
-
-        // Check if users share any guilds
-        const sharedGuilds = user.privacy.enabledGuilds.filter(guild =>
-            otherUser.privacy.enabledGuilds.includes(guild)
-        );
-
-        return sharedGuilds.length > 0;
-    }).map(otherUser => {
-        // If either user has blocked the other, return user without location
-        if (user.privacy.blockedUsers.includes(otherUser.id) ||
-            otherUser.privacy.blockedUsers.includes(user.id)) {
-            console.log(`GET /users: User ${otherUser.id} is blocked, removing location`);
-            return {
-                ...otherUser,
-                location: undefined
-            };
-        }
-
-        // Round coordinates based on the user's requested accuracy
-        if (otherUser.location) {
-            // Ensure desiredAccuracy exists for migration
-            const location = {
-                ...otherUser.location,
-                desiredAccuracy: otherUser.location.desiredAccuracy ?? 0
-            };
-
-            // console.debug(`GET /users: Processing location for user ${otherUser.id}:`, {
-            //     original: location,
-            //     rounded: roundCoordinates(location)
-            // });
-
-            return {
-                ...otherUser,
-                location: roundCoordinates(location)
-            };
-        }
-
-        return otherUser;
-    });
-
-    const jiggledUsers = jiggleUsers(visibleUsers);
-    console.log('GET /users: Final user count:', jiggledUsers.length);
-    res.json(jiggledUsers);
+    
+    const visibleUsers = Object.values(users)
+        .filter(other => other.id === user.id || 
+            hasSharedGuilds(user, other))
+        .map(other => {
+            // Remove location if either user blocked the other
+            if (isBlocked(user, other)) {
+                return { ...other, location: undefined };
+            }
+            
+            // Process location if it exists
+            if (other.location) {
+                return { 
+                    ...other, 
+                    location: roundCoordinates({
+                        ...other.location,
+                        desiredAccuracy: other.location.desiredAccuracy ?? 0
+                    })
+                };
+            }
+            return other;
+        });
+    
+    res.json(jiggleUsers(visibleUsers));
 });
+
+// Helper functions
+function hasSharedGuilds(user1: User, user2: User): boolean {
+    return user1.privacy.enabledGuilds.some(guild => 
+        user2.privacy.enabledGuilds.includes(guild));
+}
+
+function isBlocked(user1: User, user2: User): boolean {
+    const blocked = user1.privacy.blockedUsers.includes(user2.id) || 
+                   user2.privacy.blockedUsers.includes(user1.id);
+    if (blocked) console.log(`GET /users: User ${user2.id} is blocked, removing location`);
+    return blocked;
+}
 
 // Update user data (location, privacy settings, etc)
 app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): Promise<void> => {
     const currentUser = req.user!;
-    console.log('POST /users/me: Received update request:', {
-        userId: currentUser.id,
-        body: req.body
-    });
+    // console.log('POST /users/me: Received update request:', {
+    //     userId: currentUser.id,
+    //     body: req.body
+    // });
 
     try {
         const { username, guild, location, privacy, pushToken,
@@ -597,13 +387,13 @@ app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): P
             allowNearbyNotifications: allowNearbyNotifications ?? currentUser.allowNearbyNotifications ?? true
         });
 
-        console.log('POST /users/me: Validated and processed user data:', {
-            userId: updatedUser.id,
-            location: updatedUser.location,
-            pushToken: updatedUser.pushToken,
-            receiveNearbyNotifications: updatedUser.receiveNearbyNotifications,
-            allowNearbyNotifications: updatedUser.allowNearbyNotifications
-        });
+        // console.log('POST /users/me: Validated and processed user data:', {
+        //     userId: updatedUser.id,
+        //     location: updatedUser.location,
+        //     pushToken: updatedUser.pushToken,
+        //     receiveNearbyNotifications: updatedUser.receiveNearbyNotifications,
+        //     allowNearbyNotifications: updatedUser.allowNearbyNotifications
+        // });
 
         // Ensure the user can only update their own data
         if (currentUser.id !== updatedUser.id) {
@@ -634,7 +424,7 @@ app.post('/users/me', verifyToken, async (req: Request, res: ExpressResponse): P
 
 app.get('/users/me', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
-    console.debug('users/me: user:', user);
+    // console.debug('users/me: user:', user);
     res.json(user);
 });
 
@@ -997,39 +787,67 @@ async function checkNearbyUsers() {
     }
 }
 
-// Set up periodic check for nearby users
-setInterval(checkNearbyUsers, 6000); // Check every 6s (for now)
+// The following interval setup will be moved to the main() function.
+// // Set up periodic check for nearby users
+// setInterval(checkNearbyUsers, 6000); // Check every 6s (for now)
 
-// Start the server
-const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-});
+async function main() {
+    console.log('Executing main application function...');
 
-// Handle graceful shutdown
-const shutdown = async () => {
-    console.log('\nReceived shutdown signal. Closing server...');
+    // Load any existing data
+    loadPersistedData();
 
-    // Close the server
-    server.close(() => {
-        console.log('Server closed');
+    // Set up periodic saving
+    if (fs.existsSync(DB_DIR)) {
+        setInterval(saveDataToDisk, 60000); // Save every minute
+        console.log('Automatic data persistence enabled');
+    } else {
+        console.log('DB_DIR does not exist, automatic data persistence disabled.');
+    }
 
-        // Close APNs provider if it exists
-        if (apnProvider) {
-            apnProvider.shutdown();
-            console.log('APNs provider closed');
-        }
+    // Set up periodic check for nearby users
+    setInterval(checkNearbyUsers, 6000); // Check every 6s
 
-        // Save any pending data
-        saveDataToDisk();
-
-        console.log('Cleanup complete. Exiting...');
-        process.exit(0);
+    // Start the server
+    console.log(`Attempting to start server on port ${port}...`);
+    const server = app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
     });
-};
 
-// Handle SIGINT (Ctrl+C) and SIGTERM signals
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+    server.on('error', (err: Error) => {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    });
+
+    // Handle graceful shutdown
+    const shutdown = () => {
+        console.log('\nReceived shutdown signal. Closing server...');
+
+        server.close((err?: Error) => {
+            if (err) {
+                console.error('Error during server close:', err);
+            } else {
+                console.log('Server closed');
+            }
+
+            if (apnProvider) {
+                apnProvider.shutdown();
+                console.log('APNs provider closed');
+            }
+
+            // Save any pending data
+            saveDataToDisk();
+
+            console.log('Cleanup complete. Exiting...');
+            process.exit(err ? 1 : 0);
+        });
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+
+    console.log('Application main function finished setup. Server is running and periodic tasks scheduled.');
+}
 
 // Global error handling middleware - add before the export
 app.use((err: Error, req: Request, res: ExpressResponse, next: NextFunction) => {
@@ -1058,10 +876,22 @@ process.on('unhandledRejection', (reason) => {
     reportErrorToWebhook(error).catch(console.error);
 });
 
+// Run main function if this script is executed directly
+if (import.meta.main) {
+    main().catch(err => {
+        console.error("Failed to execute main application logic:", err);
+        process.exit(1);
+    });
+}
+
 // Add explicit export to mark as ESM module
 export default app;
 
 function loadPersistedData() {
+    if (!import.meta.main) {
+        console.log('Not in main module, skipping data load');
+        return;
+    }
     if (!fs.existsSync(DB_DIR)) {
         console.log('No db directory found, skipping data load');
         return;
@@ -1091,6 +921,10 @@ function loadPersistedData() {
 }
 
 function saveDataToDisk() {
+    if (!import.meta.main) {
+        console.log('Not in main module, skipping data persistence');
+        return;
+    }
     if (!fs.existsSync(DB_DIR)) {
         return; // Don't save if db directory doesn't exist
     }

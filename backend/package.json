@@ -4,10 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node --loader ts-node/esm index.ts",
-    "build": "tsc && npm run copy-files",
-    "copy-files": "cp demo-mode.json dist/ && cp -r static dist/",
-    "start": "node dist/index.js"
+    "dev": "bun run --watch index.ts",
+    "start": "bun run index.ts"
   },
   "author": "",
   "license": "ISC",
@@ -17,7 +15,8 @@
     "@types/node": "^22.10.10",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "@types/bun": "latest"
   },
   "dependencies": {
     "@types/node-fetch": "^2.6.12",
@@ -26,5 +25,6 @@
     "node-apn": "^3.0.0",
     "node-fetch": "^3.3.2",
     "zod": "^3.24.2"
-  }
+  },
+  "module": "index.ts"
 }
