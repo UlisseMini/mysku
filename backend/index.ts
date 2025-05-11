@@ -8,6 +8,9 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
 import apn from 'node-apn';
+import { RecentNotificationSchema, LocationSchema, DiscordUserSchema, UserSchema, DiscordTokenResponseSchema, GuildSchema, DemoDataSchema } from './src/schemas';
+import type { Location, DiscordUser, User, Guild, DemoData, RecentNotification } from './src/schemas';
+import { reportErrorToWebhook, reportNearbyUsersToWebhook } from './src/utils';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -48,130 +51,6 @@ try {
 } catch (error) {
     console.error('Failed to initialize APNs provider:', error);
     throw error;
-}
-
-// Error reporting webhook URL from environment variable
-const ERROR_WEBHOOK_URL = 'https://discord.com/api/webhooks/1353024080550301788/UcxP89nUSNEQ_994CAYXrJVFPyXxOQtB3rBolgZ2-hgb23XBjQ4R2BCnd-MkFwNlcIzQ';
-const NEARBY_WEBHOOK_URL = 'https://discord.com/api/webhooks/1358243072642646076/dC2NbR8MaDEQAzMPXTnaDI_XVnB2iuxxvGCbrbguPn1fQyQec3igtV_RF4S7G9YEGjZb'; // Added webhook for nearby notifications
-
-// Function to report errors to webhook
-async function reportErrorToWebhook(error: Error, req?: Request): Promise<void> {
-    if (!ERROR_WEBHOOK_URL) {
-        console.warn('Error webhook URL not configured. Set ERROR_WEBHOOK_URL in .env file to enable error reporting.');
-        return;
-    }
-
-    try {
-        // Create readable timestamp
-        const timestamp = new Date().toISOString();
-
-        // Format stack trace - limit to first 4 lines if it's too long
-        const stackLines = error.stack?.split('\n') || [];
-        const limitedStack = stackLines.slice(0, 4).join('\n');
-        const stackTrace = limitedStack + (stackLines.length > 4 ? '\n...(truncated)' : '');
-
-        // Create Discord webhook message with embeds for better formatting
-        const webhookPayload = {
-            content: "🚨 **Server Error Detected** 🚨",
-            embeds: [
-                {
-                    title: `Error: ${error.name}`,
-                    description: error.message,
-                    color: 15548997, // Red color
-                    fields: [
-                        {
-                            name: "📋 Stack Trace",
-                            value: `\`\`\`\n${stackTrace}\n\`\`\``,
-                            inline: false
-                        },
-                        {
-                            name: "⏰ Timestamp",
-                            value: timestamp,
-                            inline: true
-                        }
-                    ],
-                    footer: {
-                        text: "MySkew Error Monitoring"
-                    }
-                }
-            ]
-        };
-
-        // Add request details if available
-        if (req) {
-            const requestDetailsField = {
-                name: "🌐 Request Details",
-                value: [
-                    `**Method:** ${req.method}`,
-                    `**Path:** ${req.url}`,
-                    `**IP:** ${req.ip}`,
-                    `**User-Agent:** ${req.headers['user-agent'] || 'N/A'}`
-                ].join('\n'),
-                inline: false
-            };
-
-            // Add query params if present
-            if (Object.keys(req.query).length > 0) {
-                requestDetailsField.value += `\n**Query:** \`${JSON.stringify(req.query).slice(0, 500)}\``;
-            }
-
-            // Add body if present (truncate if too large)
-            if (req.body && Object.keys(req.body).length > 0) {
-                let bodyStr = JSON.stringify(req.body);
-                if (bodyStr.length > 500) {
-                    bodyStr = bodyStr.slice(0, 497) + '...';
-                }
-                requestDetailsField.value += `\n**Body:** \`${bodyStr}\``;
-            }
-
-            webhookPayload.embeds[0].fields.push(requestDetailsField);
-        }
-
-        await fetch(ERROR_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(webhookPayload)
-        });
-
-        console.log('Error reported to webhook');
-    } catch (webhookError) {
-        console.error('Failed to report error to webhook:', webhookError);
-    }
-}
-
-// Function to report nearby users to webhook - NEW
-async function reportNearbyUsersToWebhook(user1: User, user2: User, distance: number): Promise<void> {
-    if (!NEARBY_WEBHOOK_URL) {
-        console.warn('Nearby webhook URL not configured.');
-        return;
-    }
-
-    try {
-        const timestamp = new Date().toISOString();
-        const message = `📍 Users Nearby Detected!
-**${user1.duser.username}** and **${user2.duser.username}** are approximately **${Math.round(distance)}m** apart.
-Timestamp: ${timestamp}`;
-
-        const webhookPayload = {
-            content: message
-        };
-
-        await fetch(NEARBY_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(webhookPayload)
-        });
-
-        console.log(`Reported nearby users (${user1.duser.username}, ${user2.duser.username}) to webhook`);
-    } catch (webhookError) {
-        console.error('Failed to report nearby users to webhook:', webhookError);
-        // Optionally report this failure to the error webhook
-        await reportErrorToWebhook(new Error(`Failed to send nearby notification webhook: ${webhookError}`)).catch(console.error);
-    }
 }
 
 // Cache interfaces and implementations
@@ -228,84 +107,6 @@ const DISCORD_API = 'https://discord.com/api';
 if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET) {
     throw new Error('Missing required environment variables. Please check your .env file.');
 }
-
-// Zod Schemas
-const LocationSchema = z.object({
-    latitude: z.number(),
-    longitude: z.number(),
-    accuracy: z.number(),      // Actual GPS accuracy in meters
-    desiredAccuracy: z.number().optional(), // User's desired privacy-preserving accuracy in meters (optional for backward compatibility)
-    lastUpdated: z.number()
-});
-
-const PrivacySettingsSchema = z.object({
-    enabledGuilds: z.array(z.string()), // guilds sharing & viewing is enabled for
-    blockedUsers: z.array(z.string()) // users who we shouldn't send location to
-});
-
-const DiscordUserSchema = z.object({
-    id: z.string(),
-    username: z.string(),
-    avatar: z.string().nullable().optional()
-});
-
-const UserSchema = z.object({
-    id: z.string(),
-    location: LocationSchema.optional(),
-    duser: DiscordUserSchema,
-    privacy: PrivacySettingsSchema,
-    pushToken: z.string().optional(),
-    receiveNearbyNotifications: z.boolean().optional(),
-    allowNearbyNotifications: z.boolean().optional()
-});
-
-const DiscordTokenResponseSchema = z.object({
-    access_token: z.string(),
-    token_type: z.string(),
-    expires_in: z.number(),
-    refresh_token: z.string(),
-    scope: z.string()
-});
-
-// Guild schemas
-const GuildSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    icon: z.string().nullable()
-});
-
-// Demo data schema (defined after other schemas it depends on)
-const DemoDataSchema = z.object({
-    'users/@me': z.object({
-        demo: DiscordUserSchema
-    }),
-    'users/@me/guilds': z.object({
-        demo: z.array(GuildSchema)
-    }),
-    'db': z.object({
-        users: z.record(UserSchema)
-    })
-});
-
-type DemoData = z.infer<typeof DemoDataSchema>;
-type DemoApiPath = keyof DemoData;
-
-// Type inference from schemas
-type Location = z.infer<typeof LocationSchema>;
-type PrivacySettings = z.infer<typeof PrivacySettingsSchema>;
-type DiscordUser = z.infer<typeof DiscordUserSchema>;
-type User = z.infer<typeof UserSchema>;
-type DiscordTokenResponse = z.infer<typeof DiscordTokenResponseSchema>;
-type Guild = z.infer<typeof GuildSchema>;
-
-// Add schema for recent notifications
-const RecentNotificationSchema = z.object({
-    user1Id: z.string(),
-    user2Id: z.string(),
-    timestamp: z.number()
-});
-
-type RecentNotification = z.infer<typeof RecentNotificationSchema>;
 
 // Add type declaration for the extended Request
 declare global {
