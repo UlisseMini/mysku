@@ -516,10 +516,18 @@ app.get('/users', verifyToken, (req: Request, res: ExpressResponse): void => {
     const user = req.user!;
     console.log('GET /users: Processing request for user:', user.id);
 
+    const now = Date.now();
+    const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000; // 2 days in milliseconds
+
     // Filter users based on guild membership and privacy settings
     const visibleUsers: User[] = Object.values(users).filter(otherUser => {
         // Always include the current user
         if (otherUser.id === user.id) return true;
+
+        // Exclude users who haven't updated location in 2 days
+        if (!otherUser.location || (now - otherUser.location.lastUpdated) > TWO_DAYS_MS) {
+            return false;
+        }
 
         // Check if users share any guilds
         const sharedGuilds = user.privacy.enabledGuilds.filter(guild =>
